@@ -960,4 +960,10 @@
     <string name="manage_extensions">Manage extensions</string>
     <string name="manage_extensions_summary">Add, remove or update extensions</string>
     <string name="nsfw_filter">NSFW filter</string>
+    <string name="download_last_only">Download last chapter only</string>
+    <string name="download_all_new">Download all new chapters</string>
+    <string name="download_every_chapter">Download every chapter in the series</string>
+    <string name="download_multiple_prompt_message">Choose download option for new updates:</string>
+    <string name="download_no_history_prompt_message">Choose download option (no read history found):</string>
+    <string name="delete_chapter_prompt">Delete \"%s\" from downloads?</string>
 </resources>

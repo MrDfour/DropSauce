@@ -37,9 +37,21 @@ import org.koitharu.kotatsu.list.ui.model.toErrorState
 import org.koitharu.kotatsu.tracker.domain.TrackingRepository
 import org.koitharu.kotatsu.tracker.domain.UpdatesListQuickFilter
 import org.koitharu.kotatsu.tracker.domain.model.TrackingLogItem
+import org.koitharu.kotatsu.download.ui.worker.DownloadWorker
+import org.koitharu.kotatsu.download.ui.worker.DownloadTask
+import org.koitharu.kotatsu.history.data.HistoryRepository
+import org.koitharu.kotatsu.core.prefs.TriStateOption
+import org.koitharu.kotatsu.parsers.model.Manga
+import org.koitharu.kotatsu.core.db.MangaDatabase
+import org.koitharu.kotatsu.core.db.entity.toManga
+import org.koitharu.kotatsu.tracker.work.TrackWorker
 import org.koitharu.kotatsu.tracker.ui.feed.model.FeedItem
 import org.koitharu.kotatsu.tracker.ui.feed.model.UpdatedMangaHeader
-import org.koitharu.kotatsu.tracker.work.TrackWorker
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.onStart
+import org.koitharu.kotatsu.local.data.LocalStorageChanges
+import org.koitharu.kotatsu.local.data.LocalMangaRepository
+import org.koitharu.kotatsu.local.domain.model.LocalManga
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
@@ -53,7 +65,56 @@ class FeedViewModel @Inject constructor(
 	private val scheduler: TrackWorker.Scheduler,
 	private val mangaListMapper: MangaListMapper,
 	private val quickFilter: UpdatesListQuickFilter,
+	private val historyRepository: HistoryRepository,
+	private val downloadScheduler: DownloadWorker.Scheduler,
+	private val db: MangaDatabase,
+	@LocalStorageChanges private val localStorageChanges: SharedFlow<LocalManga?>,
+	private val localMangaRepository: LocalMangaRepository,
 ) : BaseViewModel(), QuickFilterListener by quickFilter {
+
+	sealed class DownloadPrompt {
+		data class MultipleUpdates(
+			val manga: Manga,
+			val lastChapterId: Long,
+			val allNewChaptersIds: LongArray,
+		) : DownloadPrompt() {
+			override fun equals(other: Any?): Boolean {
+				if (this === other) return true
+				if (other !is MultipleUpdates) return false
+				if (manga != other.manga) return false
+				if (lastChapterId != other.lastChapterId) return false
+				return allNewChaptersIds contentEquals other.allNewChaptersIds
+			}
+
+			override fun hashCode(): Int {
+				var result = manga.hashCode()
+				result = 31 * result + lastChapterId.hashCode()
+				result = 31 * result + allNewChaptersIds.contentHashCode()
+				return result
+			}
+		}
+
+		data class NoReadHistory(
+			val manga: Manga,
+			val lastChapterId: Long,
+			val allChaptersIds: LongArray,
+		) : DownloadPrompt() {
+			override fun equals(other: Any?): Boolean {
+				if (this === other) return true
+				if (other !is NoReadHistory) return false
+				if (manga != other.manga) return false
+				if (lastChapterId != other.lastChapterId) return false
+				return allChaptersIds contentEquals other.allChaptersIds
+			}
+
+			override fun hashCode(): Int {
+				var result = manga.hashCode()
+				result = 31 * result + lastChapterId.hashCode()
+				result = 31 * result + allChaptersIds.contentHashCode()
+				return result
+			}
+		}
+	}
 
 	private val limit = MutableStateFlow(PAGE_SIZE)
 	private val isReady = AtomicBoolean(false)
@@ -68,13 +129,23 @@ class FeedViewModel @Inject constructor(
 	)
 
 	val onActionDone = MutableEventFlow<ReversibleAction>()
+	val showDownloadPrompt = MutableEventFlow<DownloadPrompt>()
+
+	data class DeleteChapterPrompt(
+		val manga: Manga,
+		val chapterId: Long,
+		val chapterTitle: String,
+	)
+
+	val showDeleteChapterPrompt = MutableEventFlow<DeleteChapterPrompt>()
 
 	@Suppress("USELESS_CAST")
 	val content = combine(
 		quickFilter.appliedOptions,
 		combine(limit, quickFilter.appliedOptions.combineWithSettings(), ::Pair)
 			.flatMapLatest { repository.observeTrackingLog(it.first, it.second) },
-	) { filters, list ->
+		localStorageChanges.onStart { emit(null) },
+	) { filters, list, _ ->
 		val result = ArrayList<ListModel>((list.size * 1.4).toInt().coerceAtLeast(3))
 		quickFilter.filterItem(filters)?.let(result::add)
 		if (list.isEmpty()) {
@@ -121,6 +192,79 @@ class FeedViewModel @Inject constructor(
 
 	fun setHeaderEnabled(value: Boolean) {
 		settings.isFeedHeaderVisible = value
+	}
+
+	fun onDownloadClick(item: FeedItem) {
+		launchJob(Dispatchers.Default) {
+			val manga = item.toMangaWithOverride()
+			val fullManga = db.getMangaDao().find(manga.id)?.toManga(
+				db.getChaptersDao().findAll(manga.id)
+			) ?: return@launchJob
+
+			val chapters = fullManga.chapters
+			if (chapters.isNullOrEmpty()) {
+				return@launchJob
+			}
+
+			val history = historyRepository.getOne(manga)
+			val hasNoReadHistory = history == null || history.chapterId == 0L
+
+			if (hasNoReadHistory) {
+				val lastChapterId = chapters.lastOrNull()?.id ?: 0L
+				val allChaptersIds = chapters.map { it.id }.toLongArray()
+				showDownloadPrompt.call(DownloadPrompt.NoReadHistory(fullManga, lastChapterId, allChaptersIds))
+			} else {
+				val lastReadChapterId = history.chapterId
+				val newChapters = chapters.takeLastWhile { it.id != lastReadChapterId }
+				if (newChapters.isEmpty()) {
+					return@launchJob
+				}
+
+				if (newChapters.size > 1) {
+					val lastChapterId = newChapters.lastOrNull()?.id ?: 0L
+					val allNewChaptersIds = newChapters.map { it.id }.toLongArray()
+					showDownloadPrompt.call(DownloadPrompt.MultipleUpdates(fullManga, lastChapterId, allNewChaptersIds))
+				} else {
+					startDownload(fullManga, longArrayOf(newChapters.first().id))
+				}
+			}
+		}
+	}
+
+	fun onDownloadChapterClick(item: FeedItem, chapterId: Long) {
+		launchJob(Dispatchers.Default) {
+			val manga = item.toMangaWithOverride()
+			startDownload(manga, longArrayOf(chapterId))
+		}
+	}
+
+	fun onDeleteChapterClick(item: FeedItem, chapterId: Long) {
+		launchJob(Dispatchers.Default) {
+			val manga = item.toMangaWithOverride()
+			val chapterTitle = item.chapters.find { it.id == chapterId }?.title ?: ""
+			showDeleteChapterPrompt.call(DeleteChapterPrompt(manga, chapterId, chapterTitle))
+		}
+	}
+
+	fun deleteDownloadedChapter(manga: Manga, chapterId: Long) {
+		launchJob(Dispatchers.Default) {
+			localMangaRepository.deleteChapters(manga, setOf(chapterId))
+		}
+	}
+
+	fun startDownload(manga: Manga, chapterIds: LongArray) {
+		launchJob(Dispatchers.Default) {
+			val task = DownloadTask(
+				mangaId = manga.id,
+				isPaused = false,
+				isSilent = false,
+				chaptersIds = chapterIds,
+				destination = null,
+				format = null,
+				allowMeteredNetwork = settings.allowDownloadOnMeteredNetwork != TriStateOption.DISABLED,
+			)
+			downloadScheduler.schedule(setOf(manga to task))
+		}
 	}
 
 	@OptIn(DelicateCoroutinesApi::class)

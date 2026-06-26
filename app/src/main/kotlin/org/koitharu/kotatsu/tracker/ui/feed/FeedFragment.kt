@@ -34,6 +34,8 @@ import org.koitharu.kotatsu.list.ui.size.StaticItemSizeResolver
 import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.parsers.model.MangaTag
 import org.koitharu.kotatsu.tracker.ui.feed.adapter.FeedAdapter
+import org.koitharu.kotatsu.tracker.ui.feed.adapter.FeedListener
+import org.koitharu.kotatsu.tracker.ui.feed.model.FeedItem
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -60,10 +62,28 @@ class FeedFragment :
 	override fun onViewBindingCreated(binding: FragmentListBinding, savedInstanceState: Bundle?) {
 		super.onViewBindingCreated(binding, savedInstanceState)
 		val sizeResolver = StaticItemSizeResolver(resources.getDimensionPixelSize(R.dimen.smaller_grid_width))
-		val feedAdapter = FeedAdapter(this, sizeResolver) { item, v ->
-			viewModel.onItemClick(item)
-			router.openDetails(item.toMangaWithOverride())
-		}
+		val feedAdapter = FeedAdapter(
+			listener = this,
+			sizeResolver = sizeResolver,
+			feedListener = object : FeedListener {
+				override fun onItemClick(item: FeedItem) {
+					viewModel.onItemClick(item)
+					router.openDetails(item.toMangaWithOverride())
+				}
+
+				override fun onDownloadClick(item: FeedItem) {
+					viewModel.onDownloadClick(item)
+				}
+
+				override fun onDownloadChapterClick(item: FeedItem, chapterId: Long) {
+					viewModel.onDownloadChapterClick(item, chapterId)
+				}
+
+				override fun onDeleteChapterClick(item: FeedItem, chapterId: Long) {
+					viewModel.onDeleteChapterClick(item, chapterId)
+				}
+			}
+		)
 		with(binding.recyclerView) {
 			val paddingVertical = resources.getDimensionPixelSize(R.dimen.list_spacing_normal)
 			setPadding(0, paddingVertical, 0, paddingVertical)
@@ -80,6 +100,8 @@ class FeedFragment :
 		viewModel.content.observe(viewLifecycleOwner, feedAdapter)
 		viewModel.onError.observeEvent(viewLifecycleOwner, SnackbarErrorObserver(binding.recyclerView, this))
 		viewModel.onActionDone.observeEvent(viewLifecycleOwner, ReversibleActionObserver(binding.recyclerView))
+		viewModel.showDownloadPrompt.observeEvent(viewLifecycleOwner, ::showDownloadPromptDialog)
+		viewModel.showDeleteChapterPrompt.observeEvent(viewLifecycleOwner, ::showDeleteChapterPromptDialog)
 		viewModel.isRunning.observe(viewLifecycleOwner, this::onIsTrackerRunningChanged)
 	}
 
@@ -118,6 +140,58 @@ class FeedFragment :
 
 	private fun onIsTrackerRunningChanged(isRunning: Boolean) {
 		requireViewBinding().swipeRefreshLayout.isRefreshing = isRunning
+	}
+
+	private fun showDownloadPromptDialog(prompt: FeedViewModel.DownloadPrompt) {
+		val context = requireContext()
+		when (prompt) {
+			is FeedViewModel.DownloadPrompt.MultipleUpdates -> {
+				com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+					.setTitle(R.string.download_multiple_prompt_message)
+					.setItems(
+						arrayOf(
+							context.getString(R.string.download_last_only),
+							context.getString(R.string.download_all_new)
+						)
+					) { _, which ->
+						if (which == 0) {
+							viewModel.startDownload(prompt.manga, longArrayOf(prompt.lastChapterId))
+						} else {
+							viewModel.startDownload(prompt.manga, prompt.allNewChaptersIds)
+						}
+					}
+					.show()
+			}
+
+			is FeedViewModel.DownloadPrompt.NoReadHistory -> {
+				com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+					.setTitle(R.string.download_no_history_prompt_message)
+					.setItems(
+						arrayOf(
+							context.getString(R.string.download_last_only),
+							context.getString(R.string.download_every_chapter)
+						)
+					) { _, which ->
+						if (which == 0) {
+							viewModel.startDownload(prompt.manga, longArrayOf(prompt.lastChapterId))
+						} else {
+							viewModel.startDownload(prompt.manga, prompt.allChaptersIds)
+						}
+					}
+					.show()
+			}
+		}
+	}
+
+	private fun showDeleteChapterPromptDialog(prompt: FeedViewModel.DeleteChapterPrompt) {
+		com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+			.setTitle(R.string.delete)
+			.setMessage(getString(R.string.delete_chapter_prompt, prompt.chapterTitle))
+			.setPositiveButton(R.string.delete) { _, _ ->
+				viewModel.deleteDownloadedChapter(prompt.manga, prompt.chapterId)
+			}
+			.setNegativeButton(android.R.string.cancel, null)
+			.show()
 	}
 
 	override fun onScrolledToEnd() {
