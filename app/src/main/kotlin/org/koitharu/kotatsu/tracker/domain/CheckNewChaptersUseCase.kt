@@ -23,6 +23,7 @@ import javax.inject.Singleton
 
 @Singleton
 class CheckNewChaptersUseCase @Inject constructor(
+	private val db: org.koitharu.kotatsu.core.db.MangaDatabase,
 	private val repository: TrackingRepository,
 	private val historyRepository: HistoryRepository,
 	private val mangaRepositoryFactory: MangaRepository.Factory,
@@ -74,7 +75,10 @@ class CheckNewChaptersUseCase @Inject constructor(
 
 	private suspend fun invokeImpl(track: MangaTracking): MangaUpdates = runCatchingCancellable {
 		val details = getFullManga(track.manga)
-		compare(track, details, getBranch(details, track.lastChapterId))
+		val history = historyRepository.getOne(track.manga)
+		val addedAt = db.getFavouritesDao().findAllRaw(track.manga.id)
+			.minOfOrNull { it.createdAt } ?: 0L
+		compare(track, details, getBranch(details, track.lastChapterId), history, addedAt)
 	}.getOrElse { error ->
 		MangaUpdates.Failure(
 			manga = track.manga,
@@ -120,28 +124,48 @@ class CheckNewChaptersUseCase @Inject constructor(
 	/**
 	 * The main functionality of tracker: check new chapters in [manga] comparing to the [track]
 	 */
-	private fun compare(track: MangaTracking, manga: Manga, branch: String?): MangaUpdates.Success {
-		if (track.isEmpty() || track.needsPreload) {
-			// first check, manga was empty on last check, or entry needs preload after restore/add
-			return MangaUpdates.Success(manga, branch, emptyList(), isValid = false)
+	private fun compare(
+		track: MangaTracking,
+		manga: Manga,
+		branch: String?,
+		history: org.koitharu.kotatsu.core.model.MangaHistory?,
+		addedAt: Long,
+	): MangaUpdates.Success {
+		val isPreload = track.isEmpty() || track.needsPreload
+		val lastChapterId = if (isPreload && history != null) {
+			history.chapterId
+		} else {
+			track.lastChapterId
 		}
+
 		val chapters = requireNotNull(manga.getChapters(branch))
-		if (BuildConfig.DEBUG && chapters.findById(track.lastChapterId) == null) {
-			Log.e("Tracker", "Chapter ${track.lastChapterId} not found")
+		val newChapters = if (lastChapterId == 0L) {
+			if (addedAt > 0L) {
+				chapters.filter { it.uploadDate > addedAt }
+			} else {
+				emptyList()
+			}
+		} else {
+			val list = chapters.takeLastWhile { x -> x.id != lastChapterId }
+			if (list.size == chapters.size) {
+				if (addedAt > 0L) {
+					chapters.filter { it.uploadDate > addedAt }
+				} else {
+					emptyList()
+				}
+			} else {
+				list
+			}
 		}
-		val newChapters = chapters.takeLastWhile { x -> x.id != track.lastChapterId }
+
 		return when {
 			newChapters.isEmpty() -> {
 				MangaUpdates.Success(
 					manga = manga,
 					branch = branch,
 					newChapters = emptyList(),
-					isValid = chapters.lastOrNull()?.id == track.lastChapterId,
+					isValid = chapters.lastOrNull()?.id == lastChapterId,
 				)
-			}
-
-			newChapters.size == chapters.size -> {
-				MangaUpdates.Success(manga, branch, emptyList(), isValid = false)
 			}
 
 			else -> {
