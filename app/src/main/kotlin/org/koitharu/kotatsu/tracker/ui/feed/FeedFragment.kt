@@ -78,6 +78,10 @@ class FeedFragment :
 				override fun onDownloadChapterClick(item: FeedItem, chapterId: Long) {
 					viewModel.onDownloadChapterClick(item, chapterId)
 				}
+
+				override fun onDeleteChapterClick(item: FeedItem, chapterId: Long) {
+					viewModel.onDeleteChapterClick(item, chapterId)
+				}
 			}
 		)
 		with(binding.recyclerView) {
@@ -97,6 +101,7 @@ class FeedFragment :
 		viewModel.onError.observeEvent(viewLifecycleOwner, SnackbarErrorObserver(binding.recyclerView, this))
 		viewModel.onActionDone.observeEvent(viewLifecycleOwner, ReversibleActionObserver(binding.recyclerView))
 		viewModel.showDownloadPrompt.observeEvent(viewLifecycleOwner, ::showDownloadPromptDialog)
+		viewModel.showDeleteChapterPrompt.observeEvent(viewLifecycleOwner, ::showDeleteChapterPromptDialog)
 		viewModel.isRunning.observe(viewLifecycleOwner, this::onIsTrackerRunningChanged)
 	}
 
@@ -142,8 +147,7 @@ class FeedFragment :
 		when (prompt) {
 			is FeedViewModel.DownloadPrompt.MultipleUpdates -> {
 				com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-					.setTitle(R.string.download)
-					.setMessage(R.string.download_multiple_prompt_message)
+					.setTitle(R.string.download_multiple_prompt_message)
 					.setItems(
 						arrayOf(
 							context.getString(R.string.download_last_only),
@@ -161,8 +165,7 @@ class FeedFragment :
 
 			is FeedViewModel.DownloadPrompt.NoReadHistory -> {
 				com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-					.setTitle(R.string.download)
-					.setMessage(R.string.download_no_history_prompt_message)
+					.setTitle(R.string.download_no_history_prompt_message)
 					.setItems(
 						arrayOf(
 							context.getString(R.string.download_last_only),
@@ -178,6 +181,17 @@ class FeedFragment :
 					.show()
 			}
 		}
+	}
+
+	private fun showDeleteChapterPromptDialog(prompt: FeedViewModel.DeleteChapterPrompt) {
+		com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+			.setTitle(R.string.delete)
+			.setMessage(getString(R.string.delete_chapter_prompt, prompt.chapterTitle))
+			.setPositiveButton(R.string.delete) { _, _ ->
+				viewModel.deleteDownloadedChapter(prompt.manga, prompt.chapterId)
+			}
+			.setNegativeButton(android.R.string.cancel, null)
+			.show()
 	}
 
 	override fun onScrolledToEnd() {

@@ -964,4 +964,5 @@
     <string name="download_every_chapter">Download every chapter in the series</string>
     <string name="download_multiple_prompt_message">Choose download option for new updates:</string>
     <string name="download_no_history_prompt_message">Choose download option (no read history found):</string>
+    <string name="delete_chapter_prompt">Delete \"%s\" from downloads?</string>
 </resources>

@@ -13,6 +13,7 @@ interface FeedListener {
 	fun onItemClick(item: FeedItem)
 	fun onDownloadClick(item: FeedItem)
 	fun onDownloadChapterClick(item: FeedItem, chapterId: Long)
+	fun onDeleteChapterClick(item: FeedItem, chapterId: Long)
 }
 
 fun feedItemAD(
@@ -67,8 +68,16 @@ fun feedItemAD(
 					val titleView = view.findViewById<android.widget.TextView>(R.id.textView_chapter_title)
 					val downloadView = view.findViewById<android.widget.ImageView>(R.id.imageView_download_chapter)
 					titleView.text = ch.title
-					downloadView.setOnClickListener {
-						listener.onDownloadChapterClick(item, ch.id)
+					if (ch.isDownloaded) {
+						downloadView.setImageResource(R.drawable.ic_storage)
+						downloadView.setOnClickListener {
+							listener.onDeleteChapterClick(item, ch.id)
+						}
+					} else {
+						downloadView.setImageResource(R.drawable.ic_save)
+						downloadView.setOnClickListener {
+							listener.onDownloadChapterClick(item, ch.id)
+						}
 					}
 					binding.linearLayoutChapters.addView(view)
 				}

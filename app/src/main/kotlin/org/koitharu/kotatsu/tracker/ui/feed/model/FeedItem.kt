@@ -14,6 +14,7 @@ import kotlinx.parcelize.Parcelize
 data class FeedChapter(
 	val id: Long,
 	val title: String,
+	val isDownloaded: Boolean = false,
 ) : Parcelable
 
 data class FeedItem(

@@ -81,13 +81,17 @@ class MangaListMapper @Inject constructor(
 
 	suspend fun toFeedItem(logItem: TrackingLogItem): FeedItem {
 		val fullManga = dataRepository.findMangaById(logItem.manga.id, withChapters = true)
+		val localManga = localMangaIndex.get(logItem.manga.id, withDetails = true)
+		val localChaptersIds = localManga?.manga?.chapters?.map { it.id }?.toSet().orEmpty()
 		val feedChapters = logItem.chapters.map { title ->
 			val matched = fullManga?.chapters?.find { c ->
 				c.title == title || c.getLocalizedTitle(context.resources) == title
 			}
+			val chapterId = matched?.id ?: 0L
 			org.koitharu.kotatsu.tracker.ui.feed.model.FeedChapter(
-				id = matched?.id ?: 0L,
+				id = chapterId,
 				title = title,
+				isDownloaded = chapterId in localChaptersIds,
 			)
 		}
 		return FeedItem(

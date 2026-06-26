@@ -47,6 +47,11 @@ import org.koitharu.kotatsu.core.db.entity.toManga
 import org.koitharu.kotatsu.tracker.work.TrackWorker
 import org.koitharu.kotatsu.tracker.ui.feed.model.FeedItem
 import org.koitharu.kotatsu.tracker.ui.feed.model.UpdatedMangaHeader
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.onStart
+import org.koitharu.kotatsu.local.data.LocalStorageChanges
+import org.koitharu.kotatsu.local.data.LocalMangaRepository
+import org.koitharu.kotatsu.local.domain.model.LocalManga
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
@@ -63,6 +68,8 @@ class FeedViewModel @Inject constructor(
 	private val historyRepository: HistoryRepository,
 	private val downloadScheduler: DownloadWorker.Scheduler,
 	private val db: MangaDatabase,
+	@LocalStorageChanges private val localStorageChanges: SharedFlow<LocalManga?>,
+	private val localMangaRepository: LocalMangaRepository,
 ) : BaseViewModel(), QuickFilterListener by quickFilter {
 
 	sealed class DownloadPrompt {
@@ -124,12 +131,21 @@ class FeedViewModel @Inject constructor(
 	val onActionDone = MutableEventFlow<ReversibleAction>()
 	val showDownloadPrompt = MutableEventFlow<DownloadPrompt>()
 
+	data class DeleteChapterPrompt(
+		val manga: Manga,
+		val chapterId: Long,
+		val chapterTitle: String,
+	)
+
+	val showDeleteChapterPrompt = MutableEventFlow<DeleteChapterPrompt>()
+
 	@Suppress("USELESS_CAST")
 	val content = combine(
 		quickFilter.appliedOptions,
 		combine(limit, quickFilter.appliedOptions.combineWithSettings(), ::Pair)
 			.flatMapLatest { repository.observeTrackingLog(it.first, it.second) },
-	) { filters, list ->
+		localStorageChanges.onStart { emit(null) },
+	) { filters, list, _ ->
 		val result = ArrayList<ListModel>((list.size * 1.4).toInt().coerceAtLeast(3))
 		quickFilter.filterItem(filters)?.let(result::add)
 		if (list.isEmpty()) {
@@ -219,6 +235,20 @@ class FeedViewModel @Inject constructor(
 		launchJob(Dispatchers.Default) {
 			val manga = item.toMangaWithOverride()
 			startDownload(manga, longArrayOf(chapterId))
+		}
+	}
+
+	fun onDeleteChapterClick(item: FeedItem, chapterId: Long) {
+		launchJob(Dispatchers.Default) {
+			val manga = item.toMangaWithOverride()
+			val chapterTitle = item.chapters.find { it.id == chapterId }?.title ?: ""
+			showDeleteChapterPrompt.call(DeleteChapterPrompt(manga, chapterId, chapterTitle))
+		}
+	}
+
+	fun deleteDownloadedChapter(manga: Manga, chapterId: Long) {
+		launchJob(Dispatchers.Default) {
+			localMangaRepository.deleteChapters(manga, setOf(chapterId))
 		}
 	}
 
