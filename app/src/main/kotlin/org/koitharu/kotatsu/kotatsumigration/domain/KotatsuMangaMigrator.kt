@@ -91,6 +91,7 @@ class KotatsuMangaMigrator @Inject constructor(
 						lastChapterDate = t.lastChapterDate,
 						lastResult = t.lastResult,
 						lastError = t.lastError,
+						needsPreload = t.needsPreload,
 					),
 				)
 			}

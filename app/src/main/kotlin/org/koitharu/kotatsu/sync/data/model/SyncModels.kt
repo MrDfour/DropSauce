@@ -72,6 +72,7 @@ class SyncTrack(
 		lastChapterDate = lastChapterDate,
 		lastResult = lastResult,
 		lastError = lastError,
+		needsPreload = lastChapterId == 0L,
 	)
 }
 

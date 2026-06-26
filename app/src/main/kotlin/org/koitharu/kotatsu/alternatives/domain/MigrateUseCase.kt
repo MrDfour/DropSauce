@@ -83,6 +83,7 @@ constructor(
 						lastChapterDate = lastChapter?.uploadDate ?: 0L,
 						lastResult = TrackEntity.RESULT_EXTERNAL_MODIFICATION,
 						lastError = null,
+						needsPreload = lastChapter == null,
 					)
 				tracksDao.delete(oldDetails.id)
 				tracksDao.upsert(newTrack)
