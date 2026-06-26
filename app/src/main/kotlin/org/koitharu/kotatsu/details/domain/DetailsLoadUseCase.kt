@@ -38,6 +38,7 @@ import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.parsers.util.nullIfEmpty
 import org.koitharu.kotatsu.parsers.util.recoverNotNull
 import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
+import org.koitharu.kotatsu.tracker.domain.TrackingRepository
 import javax.inject.Inject
 
 class DetailsLoadUseCase @Inject constructor(
@@ -48,6 +49,7 @@ class DetailsLoadUseCase @Inject constructor(
 	private val imageGetter: Html.ImageGetter,
 	private val networkState: NetworkState,
 	private val mihonExtensionManager: MihonExtensionManager,
+	private val trackingRepository: TrackingRepository,
 ) {
 
 	operator fun invoke(intent: MangaIntent, force: Boolean): Flow<MangaDetails> = flow {
@@ -138,20 +140,34 @@ class DetailsLoadUseCase @Inject constructor(
 		override: MangaOverride?,
 		force: Boolean
 	) = coroutineScope {
+		val lastCheck = trackingRepository.getTrackOrNull(manga)?.lastCheck?.toEpochMilli() ?: 0L
+		val isRecent = !force && !manga.chapters.isNullOrEmpty() && (System.currentTimeMillis() - lastCheck < 24 * 60 * 60 * 1000L)
+		val localManga = localMangaRepository.findSavedManga(manga, withDetails = true)
+
+		if (isRecent) {
+			val mangaDetails = MangaDetails(
+				manga = manga,
+				localManga = localManga,
+				override = override,
+				description = (manga.description ?: localManga?.manga?.description)?.parseAsHtml(withImages = true),
+				isLoaded = true,
+			)
+			emit(mangaDetails)
+			return@coroutineScope
+		}
+
+		emit(
+			MangaDetails(
+				manga = manga,
+				localManga = localManga,
+				override = override,
+				description = (manga.description ?: localManga?.manga?.description)?.parseAsHtml(withImages = true),
+				isLoaded = false,
+			),
+		)
+
 		val remoteDeferred = async {
 			getDetails(manga, force)
-		}
-		val localManga = localMangaRepository.findSavedManga(manga, withDetails = true)
-		if (localManga != null) {
-			emit(
-				MangaDetails(
-					manga = manga,
-					localManga = localManga,
-					override = override,
-					description = localManga.manga.description?.parseAsHtml(withImages = true),
-					isLoaded = false,
-				),
-			)
 		}
 		val remoteResult = remoteDeferred.await()
 		if (remoteResult.isFailure) {

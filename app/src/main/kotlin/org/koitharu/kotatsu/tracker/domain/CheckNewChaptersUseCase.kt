@@ -6,6 +6,7 @@ import org.koitharu.kotatsu.BuildConfig
 import org.koitharu.kotatsu.core.model.getPreferredBranch
 import org.koitharu.kotatsu.core.model.isLocal
 import org.koitharu.kotatsu.core.parser.CachingMangaRepository
+import org.koitharu.kotatsu.core.parser.MangaDataRepository
 import org.koitharu.kotatsu.core.parser.MangaRepository
 import org.koitharu.kotatsu.core.util.MultiMutex
 import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
@@ -28,6 +29,7 @@ class CheckNewChaptersUseCase @Inject constructor(
 	private val historyRepository: HistoryRepository,
 	private val mangaRepositoryFactory: MangaRepository.Factory,
 	private val localMangaRepository: LocalMangaRepository,
+	private val mangaDataRepository: MangaDataRepository,
 ) {
 
 	private val mutex = MultiMutex<Long>()
@@ -114,11 +116,13 @@ class CheckNewChaptersUseCase @Inject constructor(
 
 	private suspend fun fetchDetails(manga: Manga): Manga {
 		val repo = mangaRepositoryFactory.create(manga.source)
-		return if (repo is CachingMangaRepository) {
+		val details = if (repo is CachingMangaRepository) {
 			repo.getDetails(manga, CachePolicy.WRITE_ONLY)
 		} else {
 			repo.getDetails(manga)
 		}
+		mangaDataRepository.storeManga(details, replaceExisting = true, stripAppliedOverride = false)
+		return details
 	}
 
 	/**
@@ -141,7 +145,13 @@ class CheckNewChaptersUseCase @Inject constructor(
 		val chapters = requireNotNull(manga.getChapters(branch))
 		val newChapters = if (lastChapterId == 0L) {
 			if (addedAt > 0L) {
-				chapters.filter { it.uploadDate > addedAt }
+				val addedAtStartOfDay = java.time.Instant.ofEpochMilli(addedAt)
+					.atZone(java.time.ZoneId.systemDefault())
+					.toLocalDate()
+					.atStartOfDay(java.time.ZoneId.systemDefault())
+					.toInstant()
+					.toEpochMilli()
+				chapters.filter { it.uploadDate >= addedAtStartOfDay }
 			} else {
 				emptyList()
 			}
@@ -149,7 +159,13 @@ class CheckNewChaptersUseCase @Inject constructor(
 			val list = chapters.takeLastWhile { x -> x.id != lastChapterId }
 			if (list.size == chapters.size) {
 				if (addedAt > 0L) {
-					chapters.filter { it.uploadDate > addedAt }
+					val addedAtStartOfDay = java.time.Instant.ofEpochMilli(addedAt)
+						.atZone(java.time.ZoneId.systemDefault())
+						.toLocalDate()
+						.atStartOfDay(java.time.ZoneId.systemDefault())
+						.toInstant()
+						.toEpochMilli()
+					chapters.filter { it.uploadDate >= addedAtStartOfDay }
 				} else {
 					emptyList()
 				}

@@ -71,16 +71,12 @@ class FeedViewModel @Inject constructor(
 
 	@Suppress("USELESS_CAST")
 	val content = combine(
-		observeHeader(),
 		quickFilter.appliedOptions,
 		combine(limit, quickFilter.appliedOptions.combineWithSettings(), ::Pair)
 			.flatMapLatest { repository.observeTrackingLog(it.first, it.second) },
-	) { header, filters, list ->
+	) { filters, list ->
 		val result = ArrayList<ListModel>((list.size * 1.4).toInt().coerceAtLeast(3))
 		quickFilter.filterItem(filters)?.let(result::add)
-		if (header != null) {
-			result += header
-		}
 		if (list.isEmpty()) {
 			result += EmptyState(
 				icon = R.drawable.ic_empty_feed,
