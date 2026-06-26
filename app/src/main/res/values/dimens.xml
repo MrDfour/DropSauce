@@ -22,6 +22,7 @@
 	<dimen name="chapter_list_item_height">48dp</dimen>
 	<dimen name="preferred_grid_width">120dp</dimen>
 	<dimen name="small_grid_width">92dp</dimen>
+	<dimen name="smaller_grid_width">102dp</dimen>
 	<dimen name="list_footer_height_outer">48dp</dimen>
 	<dimen name="extension_action_button_size">40dp</dimen>
 	<dimen name="extension_action_button_group_width">124dp</dimen>
