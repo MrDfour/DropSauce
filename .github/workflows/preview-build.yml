@@ -42,11 +42,13 @@ jobs:
 
       - name: Pre-warm JitPack dependencies
         run: |
+          set -euo pipefail
           PARSERS_VERSION=$(grep 'parsers = ' gradle/libs.versions.toml | sed 's/.*= "\(.*\)"/\1/')
           echo "Pre-warming JitPack for kotatsu-parsers:${PARSERS_VERSION}"
           POM_URL="https://jitpack.io/com/github/YakaTeam/kotatsu-parsers/${PARSERS_VERSION}/kotatsu-parsers-${PARSERS_VERSION}.pom"
+
           for i in $(seq 1 10); do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$POM_URL")
+            HTTP_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" "$POM_URL" || echo "000")
             if [ "$HTTP_STATUS" = "200" ]; then
               echo "JitPack artifact is ready (HTTP 200)"
               exit 0
@@ -54,7 +56,8 @@ jobs:
             echo "Attempt $i: JitPack returned HTTP ${HTTP_STATUS}, waiting 30s..."
             sleep 30
           done
-          echo "::error::JitPack artifact for kotatsu-parsers:${PARSERS_VERSION} not available after 10 attempts"
+
+          echo "::warning::JitPack artifact for kotatsu-parsers:${PARSERS_VERSION} not available after 10 attempts; continuing anyway"
           exit 0
 
       - name: Build preview APK
