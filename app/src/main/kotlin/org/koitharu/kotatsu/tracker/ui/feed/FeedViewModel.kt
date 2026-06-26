@@ -2,6 +2,7 @@ package org.koitharu.kotatsu.tracker.ui.feed
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.util.Log
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.koitharu.kotatsu.R
@@ -62,7 +64,16 @@ class FeedViewModel @Inject constructor(
 	val content = combine(
 		quickFilter.appliedOptions,
 		combine(limit, quickFilter.appliedOptions.combineWithSettings(), ::Pair)
-			.flatMapLatest { repository.observeTrackingLog(it.first, it.second) },
+			.flatMapLatest { (currentLimit, finalFilters) ->
+				Log.d("KOTATSU_FEED", "Querying DB with limit=$currentLimit filters=$finalFilters")
+				repository.observeTrackingLog(currentLimit, finalFilters)
+					.onEach { items ->
+						Log.d("KOTATSU_FEED", "DB returned ${items.size} items")
+						items.firstOrNull()?.let {
+							Log.d("KOTATSU_FEED", "First: ${it.manga.title} createdAt=${it.createdAt}")
+						}
+					}
+			}
 	) { filters, list ->
 		val result = ArrayList<ListModel>((list.size * 1.4).toInt().coerceAtLeast(3))
 		quickFilter.filterItem(filters)?.let(result::add)
