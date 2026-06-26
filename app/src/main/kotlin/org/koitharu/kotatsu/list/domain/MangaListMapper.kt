@@ -84,6 +84,7 @@ class MangaListMapper @Inject constructor(
 		count = logItem.chapters.size,
 		manga = logItem.manga,
 		isNew = logItem.isNew,
+		chapters = logItem.chapters,
 	)
 
 	fun mapTags(tags: Collection<MangaTag>) = tags.map {

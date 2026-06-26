@@ -132,7 +132,7 @@ class TrackingRepository @Inject constructor(
 				val logEntity = TrackLogEntity(
 					mangaId = updates.manga.id,
 					chapters = updates.newChapters.joinToString("\n") { x -> x.title.orEmpty() },
-					createdAt = System.currentTimeMillis(),
+					createdAt = updates.lastChapterDate(),
 					isUnread = true,
 				)
 				db.getTrackLogsDao().insert(logEntity)

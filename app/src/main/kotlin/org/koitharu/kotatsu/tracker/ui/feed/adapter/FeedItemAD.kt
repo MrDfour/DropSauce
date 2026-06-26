@@ -16,9 +16,20 @@ fun feedItemAD(
 	{ inflater, parent -> ItemFeedBinding.inflate(inflater, parent, false) },
 ) {
 	val indicatorNew = ContextCompat.getDrawable(context, R.drawable.ic_new)
+	val expandedIds = HashSet<Long>()
 
 	itemView.setOnClickListener {
 		clickListener.onItemClick(item, it)
+	}
+
+	binding.imageViewExpand.setOnClickListener {
+		val id = item.id
+		if (expandedIds.contains(id)) {
+			expandedIds.remove(id)
+		} else {
+			expandedIds.add(id)
+		}
+		bindingAdapter?.notifyItemChanged(bindingAdapterPosition)
 	}
 
 	bind {
@@ -33,6 +44,22 @@ fun feedItemAD(
 			indicatorNew
 		} else {
 			null
+		}
+
+		if (item.chapters.isNotEmpty()) {
+			binding.imageViewExpand.visibility = android.view.View.VISIBLE
+			val isExpanded = expandedIds.contains(item.id)
+			if (isExpanded) {
+				binding.textViewChapters.visibility = android.view.View.VISIBLE
+				binding.textViewChapters.text = item.chapters.joinToString("\n")
+				binding.imageViewExpand.rotation = 180f
+			} else {
+				binding.textViewChapters.visibility = android.view.View.GONE
+				binding.imageViewExpand.rotation = 0f
+			}
+		} else {
+			binding.imageViewExpand.visibility = android.view.View.GONE
+			binding.textViewChapters.visibility = android.view.View.GONE
 		}
 	}
 }

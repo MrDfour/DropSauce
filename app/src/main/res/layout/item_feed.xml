@@ -4,7 +4,8 @@
 	xmlns:app="http://schemas.android.com/apk/res-auto"
 	xmlns:tools="http://schemas.android.com/tools"
 	android:layout_width="match_parent"
-	android:layout_height="72dp"
+	android:layout_height="wrap_content"
+	android:minHeight="72dp"
 	android:background="?attr/selectableItemBackground"
 	android:clipChildren="false">
 
@@ -16,11 +17,23 @@
 		android:layout_marginTop="12dp"
 		android:layout_marginBottom="12dp"
 		android:scaleType="centerCrop"
-		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintBottom_toTopOf="@+id/textView_chapters"
 		app:layout_constraintStart_toStartOf="parent"
 		app:layout_constraintTop_toTopOf="parent"
 		app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.Kotatsu.Cover"
 		tools:src="@tools:sample/backgrounds/scenic" />
+
+	<ImageView
+		android:id="@+id/imageView_expand"
+		android:layout_width="48dp"
+		android:layout_height="48dp"
+		android:padding="12dp"
+		android:background="?attr/selectableItemBackgroundBorderless"
+		android:contentDescription="@null"
+		app:srcCompat="@drawable/ic_expand_more"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintTop_toTopOf="parent"
+		app:layout_constraintBottom_toBottomOf="@+id/imageView_cover" />
 
 	<TextView
 		android:id="@+id/textView_title"
@@ -32,7 +45,7 @@
 		android:maxLines="1"
 		android:textAppearance="?attr/textAppearanceTitleSmall"
 		app:layout_constraintBottom_toTopOf="@+id/textView_summary"
-		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintEnd_toStartOf="@+id/imageView_expand"
 		app:layout_constraintStart_toEndOf="@+id/imageView_cover"
 		app:layout_constraintTop_toTopOf="@+id/imageView_cover"
 		tools:text="@tools:sample/lorem" />
@@ -48,9 +61,28 @@
 		android:maxLines="1"
 		android:textAppearance="?attr/textAppearanceBodySmall"
 		app:layout_constraintBottom_toBottomOf="@+id/imageView_cover"
-		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintEnd_toStartOf="@+id/imageView_expand"
 		app:layout_constraintStart_toEndOf="@+id/imageView_cover"
 		app:layout_constraintTop_toBottomOf="@+id/textView_title"
 		tools:text="@tools:sample/lorem/random" />
+
+	<TextView
+		android:id="@+id/textView_chapters"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="16dp"
+		android:layout_marginEnd="16dp"
+		android:layout_marginTop="8dp"
+		android:layout_marginBottom="12dp"
+		android:visibility="gone"
+		android:lineSpacingMultiplier="1.2"
+		android:textAppearance="?attr/textAppearanceBodySmall"
+		android:textColor="?android:attr/textColorSecondary"
+		app:layout_constraintTop_toBottomOf="@+id/imageView_cover"
+		app:layout_constraintStart_toEndOf="@+id/imageView_cover"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintBottom_toBottomOf="parent"
+		tools:text="Chapter 1\nChapter 2"
+		tools:visibility="visible" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
