@@ -103,23 +103,6 @@ class TrackingRepository @Inject constructor(
 		db.getTracksDao().resetAllToPreload()
 	}
 
-	suspend fun insertDiagnosticEntryIfNeeded() {
-		val tracksCount = db.getTracksDao().getTracksCount()
-		if (tracksCount == 0) return
-		val logsCount = db.getTrackLogsDao().count()
-		if (logsCount > 0) return
-		// Feed is empty but tracker is configured — insert a visible test entry so
-		// we can confirm the feed UI renders. It will be gone on the next gc() cycle.
-		val anyMangaId = db.getTracksDao().findAllIds().firstOrNull() ?: return
-		db.getTrackLogsDao().insert(
-			TrackLogEntity(
-				mangaId = anyMangaId,
-				chapters = "[Feed diagnostic — tracker is running]",
-				createdAt = System.currentTimeMillis(),
-				isUnread = false,
-			),
-		)
-	}
 
 	suspend fun getLogsCount() = db.getTrackLogsDao().count()
 
