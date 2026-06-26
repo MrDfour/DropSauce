@@ -1,0 +1,24 @@
+* text=auto eol=crlf
+*.kt text eol=crlf
+*.kts text eol=crlf
+*.xml text eol=crlf
+*.json text eol=crlf
+*.md text eol=crlf
+*.yml text eol=crlf
+*.yaml text eol=crlf
+*.properties text eol=crlf
+*.gradle text eol=crlf
+*.toml text eol=crlf
+*.txt text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.svg binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.keystore binary
+*.jks binary

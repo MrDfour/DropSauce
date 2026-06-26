@@ -706,6 +706,10 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		get() = prefs.getString(KEY_DISCORD_TOKEN, null)?.trim()?.nullIfEmpty()
 		set(value) = prefs.edit { putString(KEY_DISCORD_TOKEN, value?.nullIfEmpty()) }
 
+	var isVerboseLoggingEnabled: Boolean
+		get() = prefs.getBoolean(KEY_VERBOSE_LOGGING, false)
+		set(value) = prefs.edit { putBoolean(KEY_VERBOSE_LOGGING, value) }
+
 	val isReadingTimeEstimationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READING_TIME, true)
 
@@ -976,6 +980,7 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_DETAILS_LAST_TAB = "details_last_tab"
 		const val KEY_DETAILS_BACKDROP = "details_backdrop"
 		const val KEY_DETAILS_BACKDROP_BLUR_AMOUNT = "details_backdrop_blur_amount"
+		const val KEY_VERBOSE_LOGGING = "verbose_logging"
 		const val KEY_READING_TIME = "reading_time"
 		const val KEY_PAGES_SAVE_DIR = "pages_dir"
 		const val KEY_PAGES_SAVE_ASK = "pages_dir_ask"
