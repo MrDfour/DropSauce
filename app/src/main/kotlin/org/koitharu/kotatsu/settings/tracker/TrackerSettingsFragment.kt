@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -85,6 +86,14 @@ class TrackerSettingsFragment : BaseComposeSettingsFragment(R.string.check_for_n
 		setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
 		setContent {
 			DropSauceTheme {
+				val onRebuildDone by viewModel.onRebuildDone.collectAsState()
+
+				if (onRebuildDone) {
+					LaunchedEffect(onRebuildDone) {
+						Snackbar.make(requireView(), "Tracking database rebuilt", Snackbar.LENGTH_SHORT).show()
+						viewModel.onRebuildDone.value = false
+					}
+				}
 				val notificationsEnabled by notificationsEnabledState.asStateFlow().collectAsState()
 				val categoriesCount by categoriesCountState.asStateFlow().collectAsState()
 				val categories by viewModel.categories.collectAsState()
@@ -109,6 +118,7 @@ class TrackerSettingsFragment : BaseComposeSettingsFragment(R.string.check_for_n
 						startActivity(Intent(requireContext(), TrackerDebugActivity::class.java))
 					},
 					onIgnoreDoze = ::startIgnoreDoseActivity,
+					onRebuildTrackingDb = viewModel::rebuildTrackingDb,
 				)
 			}
 		}
@@ -184,6 +194,7 @@ private fun TrackerScreen(
 	onOpenLegacyNotifications: () -> Unit,
 	onTrackerDebug: () -> Unit,
 	onIgnoreDoze: () -> Unit,
+	onRebuildTrackingDb: () -> Unit,
 ) {
 	val ctx = LocalContext.current
 	val colors = CategoryPalette.forKey("tracker")
@@ -336,6 +347,16 @@ private fun TrackerScreen(
 		item { Spacer(Modifier.height(8.dp).fillMaxWidth()) }
 		item {
 			SettingsGroup(title = stringResource(R.string.debug)) {
+				item { pos ->
+					ActionSettingsItem(
+						title = "Force Rebuild Tracking DB", // or stringResource(R.string.rebuild_tracking_db)
+						subtitle = "Clears baseline snapshots and forces an immediate check pass",
+						icon = R.drawable.ic_backup_restore, // or R.drawable.ic_refresh
+						shape = pos.shape,
+						enabled = enabled,
+						onClick = onRebuildTrackingDb
+					)
+				}
 				item { pos ->
 					ActionSettingsItem(
 						title = stringResource(R.string.tracker_debug_info),
