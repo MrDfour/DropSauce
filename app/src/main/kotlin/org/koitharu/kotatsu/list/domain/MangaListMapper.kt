@@ -12,6 +12,7 @@ import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.parser.MangaDataRepository
 import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.core.prefs.ListMode
+import org.koitharu.kotatsu.core.model.getLocalizedTitle
 import org.koitharu.kotatsu.core.ui.model.MangaOverride
 import org.koitharu.kotatsu.core.ui.widgets.ChipsView
 import org.koitharu.kotatsu.favourites.domain.FavouritesRepository
@@ -30,7 +31,7 @@ import javax.inject.Inject
 
 @Reusable
 class MangaListMapper @Inject constructor(
-	@ApplicationContext context: Context,
+	@ApplicationContext private val context: Context,
 	private val settings: AppSettings,
 	private val trackingRepository: TrackingRepository,
 	private val historyRepository: HistoryRepository,
@@ -78,14 +79,26 @@ class MangaListMapper @Inject constructor(
 		override = dataRepository.getOverride(manga.id),
 	)
 
-	suspend fun toFeedItem(logItem: TrackingLogItem) = FeedItem(
-		id = logItem.id,
-		override = dataRepository.getOverride(logItem.manga.id),
-		count = logItem.chapters.size,
-		manga = logItem.manga,
-		isNew = logItem.isNew,
-		chapters = logItem.chapters,
-	)
+	suspend fun toFeedItem(logItem: TrackingLogItem): FeedItem {
+		val fullManga = dataRepository.findMangaById(logItem.manga.id, withChapters = true)
+		val feedChapters = logItem.chapters.map { title ->
+			val matched = fullManga?.chapters?.find { c ->
+				c.title == title || c.getLocalizedTitle(context.resources) == title
+			}
+			org.koitharu.kotatsu.tracker.ui.feed.model.FeedChapter(
+				id = matched?.id ?: 0L,
+				title = title,
+			)
+		}
+		return FeedItem(
+			id = logItem.id,
+			override = dataRepository.getOverride(logItem.manga.id),
+			count = logItem.chapters.size,
+			manga = logItem.manga,
+			isNew = logItem.isNew,
+			chapters = feedChapters,
+		)
+	}
 
 	fun mapTags(tags: Collection<MangaTag>) = tags.map {
 		ChipsView.ChipModel(

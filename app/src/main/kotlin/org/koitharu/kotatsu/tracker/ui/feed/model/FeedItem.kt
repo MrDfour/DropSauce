@@ -7,13 +7,22 @@ import org.koitharu.kotatsu.list.ui.model.ListModel
 import org.koitharu.kotatsu.parsers.model.Manga
 import org.koitharu.kotatsu.parsers.util.ifNullOrEmpty
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
+data class FeedChapter(
+	val id: Long,
+	val title: String,
+) : Parcelable
+
 data class FeedItem(
 	val id: Long,
 	private val override: MangaOverride?,
 	val manga: Manga,
 	val count: Int,
 	val isNew: Boolean,
-	val chapters: List<String> = emptyList(),
+	val chapters: List<FeedChapter> = emptyList(),
 ) : ListModel {
 
 	val imageUrl: String?

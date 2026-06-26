@@ -20,11 +20,11 @@ import org.koitharu.kotatsu.tracker.ui.feed.model.FeedItem
 class FeedAdapter(
 	listener: MangaListListener,
 	sizeResolver: ItemSizeResolver,
-	feedClickListener: OnListItemClickListener<FeedItem>,
+	feedListener: FeedListener,
 ) : BaseListAdapter<ListModel>(), FastScroller.SectionIndexer {
 
 	init {
-		addDelegate(ListItemType.FEED, feedItemAD(feedClickListener))
+		addDelegate(ListItemType.FEED, feedItemAD(feedListener))
 		addDelegate(
 			ListItemType.MANGA_NESTED_GROUP,
 			updatedMangaAD(
