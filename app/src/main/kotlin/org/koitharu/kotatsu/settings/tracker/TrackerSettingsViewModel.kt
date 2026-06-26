@@ -16,6 +16,7 @@ import org.koitharu.kotatsu.core.db.removeObserverAsync
 import org.koitharu.kotatsu.core.ui.BaseViewModel
 import org.koitharu.kotatsu.favourites.domain.FavouritesRepository
 import org.koitharu.kotatsu.tracker.domain.TrackingRepository
+import org.koitharu.kotatsu.tracker.work.TrackWorker
 import javax.inject.Inject
 
 @HiltViewModel
@@ -24,11 +25,22 @@ class TrackerSettingsViewModel @Inject constructor(
 	private val favouritesRepository: FavouritesRepository,
 	private val settings: AppSettings,
 	private val database: MangaDatabase,
+	private val scheduler: TrackWorker.Scheduler,
 ) : BaseViewModel() {
 
 	val categoriesCount = MutableStateFlow<IntArray?>(null)
 	val categories = favouritesRepository.observeCategories()
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
+
+	val onRebuildDone = MutableStateFlow(false)
+
+	fun rebuildTrackingDb() {
+		launchLoadingJob(Dispatchers.Default) {
+			repository.resetAllTracksForRebuild()
+			scheduler.startNow()
+			onRebuildDone.value = true
+		}
+	}
 
 	init {
 		migrateLegacyDownloadStrategy()

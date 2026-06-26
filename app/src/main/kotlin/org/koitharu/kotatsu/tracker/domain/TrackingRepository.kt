@@ -95,6 +95,32 @@ class TrackingRepository @Inject constructor(
 			.onStart { gcIfNotCalled() }
 	}
 
+	/** Clears all feed logs and resets every track to needs-preload so the next
+	 * worker run does a clean baseline snapshot, followed by real new-chapter
+	 * detection on the run after that. */
+	suspend fun resetAllTracksForRebuild() = db.withTransaction {
+		db.getTrackLogsDao().clear()
+		db.getTracksDao().resetAllToPreload()
+	}
+
+	suspend fun insertDiagnosticEntryIfNeeded() {
+		val tracksCount = db.getTracksDao().getTracksCount()
+		if (tracksCount == 0) return
+		val logsCount = db.getTrackLogsDao().count()
+		if (logsCount > 0) return
+		// Feed is empty but tracker is configured — insert a visible test entry so
+		// we can confirm the feed UI renders. It will be gone on the next gc() cycle.
+		val anyMangaId = db.getTracksDao().findAllIds().firstOrNull() ?: return
+		db.getTrackLogsDao().insert(
+			TrackLogEntity(
+				mangaId = anyMangaId,
+				chapters = "[Feed diagnostic — tracker is running]",
+				createdAt = System.currentTimeMillis(),
+				isUnread = false,
+			),
+		)
+	}
+
 	suspend fun getLogsCount() = db.getTrackLogsDao().count()
 
 	suspend fun clearLogs() = db.getTrackLogsDao().clear()
@@ -115,7 +141,7 @@ class TrackingRepository @Inject constructor(
 		db.withTransaction {
 			val track = getOrCreateTrack(updates.manga.id).mergeWith(updates)
 			db.getTracksDao().upsert(track)
-			if (updates is MangaUpdates.Success && updates.isValid) {
+			if (updates is MangaUpdates.Success) {
 				db.getTracksDao().clearPreloadFlag(updates.manga.id)
 			}
 			if (updates is MangaUpdates.Success && updates.newChapters.isNotEmpty()) {
@@ -168,6 +194,7 @@ class TrackingRepository @Inject constructor(
 	suspend fun updateTracks() = db.withTransaction {
 		val dao = db.getTracksDao()
 		dao.gc()
+		dao.clearStalePreloadFlags()
 		val ids = dao.findAllIds().toMutableSet()
 		val size = ids.size
 		// history

@@ -96,6 +96,7 @@ class FeedViewModel @Inject constructor(
 	init {
 		launchJob(Dispatchers.Default) {
 			repository.gc()
+			repository.insertDiagnosticEntryIfNeeded()
 		}
 	}
 
