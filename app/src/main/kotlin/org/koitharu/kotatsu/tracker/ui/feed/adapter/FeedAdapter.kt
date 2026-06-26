@@ -14,15 +14,25 @@ import org.koitharu.kotatsu.list.ui.adapter.loadingFooterAD
 import org.koitharu.kotatsu.list.ui.adapter.loadingStateAD
 import org.koitharu.kotatsu.list.ui.adapter.quickFilterAD
 import org.koitharu.kotatsu.list.ui.model.ListModel
+import org.koitharu.kotatsu.list.ui.size.ItemSizeResolver
 import org.koitharu.kotatsu.tracker.ui.feed.model.FeedItem
 
 class FeedAdapter(
 	listener: MangaListListener,
+	sizeResolver: ItemSizeResolver,
 	feedClickListener: OnListItemClickListener<FeedItem>,
 ) : BaseListAdapter<ListModel>(), FastScroller.SectionIndexer {
 
 	init {
 		addDelegate(ListItemType.FEED, feedItemAD(feedClickListener))
+		addDelegate(
+			ListItemType.MANGA_NESTED_GROUP,
+			updatedMangaAD(
+				sizeResolver = sizeResolver,
+				listener = listener,
+				headerClickListener = listener,
+			),
+		)
 		addDelegate(ListItemType.FOOTER_LOADING, loadingFooterAD())
 		addDelegate(ListItemType.STATE_LOADING, loadingStateAD())
 		addDelegate(ListItemType.FOOTER_ERROR, errorFooterAD(listener))

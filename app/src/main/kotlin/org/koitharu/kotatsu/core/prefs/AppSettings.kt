@@ -303,6 +303,18 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		get() = prefs.getBoolean(KEY_UPDATED_GROUPING, true)
 		set(value) = prefs.edit { putBoolean(KEY_UPDATED_GROUPING, value) }
 
+	var isFeedHeaderVisible: Boolean
+		get() = prefs.getBoolean(KEY_FEED_HEADER, true)
+		set(value) = prefs.edit { putBoolean(KEY_FEED_HEADER, value) }
+
+	var isTrackerUnstuckMigrationDone: Boolean
+		get() = prefs.getBoolean(KEY_TRACKER_UNSTUCK_MIGRATION_V3, false)
+		set(value) = prefs.edit { putBoolean(KEY_TRACKER_UNSTUCK_MIGRATION_V3, value) }
+
+	var isTrackerProgressRefreshDone: Boolean
+		get() = prefs.getBoolean(KEY_TRACKER_PROGRESS_REFRESH_V1, false)
+		set(value) = prefs.edit { putBoolean(KEY_TRACKER_PROGRESS_REFRESH_V1, value) }
+
 	// A single on/off toggle now: on = show the read-percentage pill, off = no indicator.
 	var progressIndicatorMode: ProgressIndicatorMode
 		get() {
@@ -909,6 +921,9 @@ class AppSettings @Inject constructor(@ApplicationContext context: Context) {
 		const val KEY_ZOOM_MODE = "zoom_mode"
 		const val KEY_HISTORY_GROUPING = "history_grouping"
 		const val KEY_UPDATED_GROUPING = "updated_grouping"
+		const val KEY_FEED_HEADER = "feed_header"
+		const val KEY_TRACKER_UNSTUCK_MIGRATION_V3 = "tracker_unstuck_migration_v3"
+		const val KEY_TRACKER_PROGRESS_REFRESH_V1 = "tracker_progress_refresh_v1"
 		const val KEY_PROGRESS_INDICATORS = "reading_indicator_enabled"
 		const val KEY_DETAILS_UI = "details_ui"
 		const val KEY_REVERSE_CHAPTERS = "reverse_chapters"

@@ -10,8 +10,10 @@ import org.koitharu.kotatsu.core.util.ext.processLifecycleScope
 import org.koitharu.kotatsu.suggestions.ui.SuggestionsWorker
 import org.koitharu.kotatsu.sync.data.SyncSettings
 import org.koitharu.kotatsu.sync.work.SyncWorker
+import org.koitharu.kotatsu.tracker.domain.TrackerUnstuckMigrationUseCase
 import org.koitharu.kotatsu.tracker.work.TrackWorker
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Singleton
@@ -23,6 +25,7 @@ class WorkScheduleManager @Inject constructor(
 	private val trackerScheduler: TrackWorker.Scheduler,
 	private val backupScheduler: PeriodicalBackupWorker.Scheduler,
 	private val syncScheduler: SyncWorker.Scheduler,
+	private val trackerUnstuckMigrationProvider: Provider<TrackerUnstuckMigrationUseCase>,
 ) : SharedPreferences.OnSharedPreferenceChangeListener {
 
 	override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
@@ -72,6 +75,9 @@ class WorkScheduleManager @Inject constructor(
 			if (syncSettings.isSignedIn && syncSettings.isSyncOnStart) {
 				SyncWorker.enqueueManual(workManager)
 			}
+		}
+		processLifecycleScope.launch(Dispatchers.Default) {
+			trackerUnstuckMigrationProvider.get().runIfNeeded()
 		}
 	}
 
