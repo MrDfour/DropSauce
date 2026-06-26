@@ -1,15 +1,21 @@
 package org.koitharu.kotatsu.core.logs
 
 import android.util.Log
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.util.concurrent.ArrayBlockingQueue
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val MAX_ENTRIES = 2000
-private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+private const val MAX_ENTRIES = 4000
 
 @Singleton
 class AppLogger @Inject constructor() {
@@ -19,41 +25,55 @@ class AppLogger @Inject constructor() {
 		private set
 
 	private val buffer = ArrayBlockingQueue<String>(MAX_ENTRIES)
+	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+	private var readerJob: Job? = null
 
 	fun setEnabled(enabled: Boolean) {
+		if (enabled == isEnabled) return
 		isEnabled = enabled
-		if (!enabled) return
-		buffer.clear()
-		append("I", "AppLogger", "Verbose logging started")
-	}
-
-	fun log(priority: Int, tag: String?, message: String, throwable: Throwable? = null) {
-		if (!isEnabled) return
-		val level = when (priority) {
-			Log.VERBOSE -> "V"
-			Log.DEBUG   -> "D"
-			Log.INFO    -> "I"
-			Log.WARN    -> "W"
-			Log.ERROR   -> "E"
-			Log.ASSERT  -> "A"
-			else        -> "?"
+		if (enabled) {
+			buffer.clear()
+			startReading()
+		} else {
+			stopReading()
 		}
-		val body = if (throwable != null) "$message\n${Log.getStackTraceString(throwable)}" else message
-		append(level, tag ?: "?", body)
 	}
 
-	/** Drains the current buffer to a single string without clearing the preference state. */
+	/** Drains the current buffer to a single string. */
 	fun drainToString(): String {
 		val lines = ArrayList<String>(buffer.size)
 		buffer.drainTo(lines)
 		return lines.joinToString("\n")
 	}
 
-	private fun append(level: String, tag: String, message: String) {
-		val line = "${DATE_FORMAT.format(Date())} $level/$tag: $message"
-		if (!buffer.offer(line)) {
-			buffer.poll()
-			buffer.offer(line)
+	private fun startReading() {
+		readerJob = scope.launch {
+			try {
+				Runtime.getRuntime().exec(arrayOf("logcat", "-c")).waitFor()
+				val pid = android.os.Process.myPid().toString()
+				val process = Runtime.getRuntime().exec(arrayOf("logcat", "-v", "time", "--pid", pid))
+				val reader = BufferedReader(InputStreamReader(process.inputStream))
+				try {
+					while (isActive) {
+						val line = reader.readLine() ?: break
+						if (!buffer.offer(line)) {
+							buffer.poll()
+							buffer.offer(line)
+						}
+					}
+				} finally {
+					reader.close()
+					process.destroy()
+				}
+			} catch (e: Exception) {
+				Log.e("AppLogger", "Failed to read logcat", e)
+			}
 		}
+	}
+
+	private fun stopReading() {
+		val job = readerJob ?: return
+		readerJob = null
+		runBlocking { job.cancelAndJoin() }
 	}
 }

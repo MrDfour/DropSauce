@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.withContext
 import org.koitharu.kotatsu.core.github.AppUpdateRepository
 import org.koitharu.kotatsu.core.github.AppVersion
 import org.koitharu.kotatsu.core.logs.AppLogger
@@ -56,9 +55,9 @@ class AboutSettingsViewModel @Inject constructor(
 		if (enabled) {
 			appLogger.setEnabled(true)
 		} else {
-			appLogger.setEnabled(false)
 			launchJob(Dispatchers.Default) {
-				val content = withContext(Dispatchers.Default) { appLogger.drainToString() }
+				appLogger.setEnabled(false)
+				val content = appLogger.drainToString()
 				if (content.isNotBlank()) {
 					onExportLog.call(content)
 				}
