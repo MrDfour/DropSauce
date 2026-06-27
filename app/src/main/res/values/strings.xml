@@ -160,7 +160,10 @@
     <string name="black_dark_theme_summary">Uses less power on AMOLED screens</string>
     <string name="backup_restore">Backup and restore</string>
     <string name="create_backup">Create data backup</string>
+    <string name="create_fork_backup">Safe Backup for Kotatsu-like forks</string>
+    <string name="create_fork_backup_summary">Creates a backup compatible with other forks (like Kototoro/Usagi)</string>
     <string name="restore_backup">Restore backup</string>
+
     <string name="create_backup_summary">Save your library, history and settings to a file</string>
     <string name="restore_from_tachiyomi">Restore from Tachiyomi/Mihon</string>
     <string name="restore_tachiyomi_summary">Import a backup created by Tachiyomi or Mihon</string>

@@ -318,6 +318,21 @@ class BookmarkBackup(
 }
 
 @Serializable
+class ForkCompatibleBookmarkBackup(
+	@SerialName("manga") val manga: MangaBackup,
+	@SerialName("bookmarks") val bookmarks: List<BookmarkBackup.Item>,
+	@SerialName("tags") val tags: Set<TagBackup> = emptySet(),
+) {
+
+	constructor(mangaWithTags: MangaWithTags, entries: List<BookmarkEntity>) : this(
+		manga = MangaBackup(mangaWithTags),
+		bookmarks = entries.map { BookmarkBackup.Item(it) },
+		tags = mangaWithTags.tags.map(::TagBackup).toSet(),
+	)
+}
+
+
+@Serializable
 class StatsBackup(
 	@SerialName("manga_id") val mangaId: Long,
 	@SerialName("started_at") val startedAt: Long,

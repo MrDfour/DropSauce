@@ -51,6 +51,7 @@ class BackupService : BaseBackupRestoreService() {
 		)
 		val destination = intent.getStringExtra(AppRouter.KEY_DATA)?.toUriOrNull()
 			?: throw FileNotFoundException()
+		val forkCompatible = intent.getBooleanExtra(KEY_FORK_COMPATIBLE, false)
 		applicationContext.powerManager.withPartialWakeLock(TAG) {
 			val progress = MutableStateFlow(Progress.INDETERMINATE)
 			val progressUpdateJob = if (applicationContext.checkNotificationPermission(CHANNEL_ID)) {
@@ -64,8 +65,9 @@ class BackupService : BaseBackupRestoreService() {
 			}
 			try {
 				ZipOutputStream(contentResolver.openOutputStream(destination)).use { output ->
-					repository.createBackup(output, progress)
+					repository.createBackup(output, progress, forkCompatible)
 				}
+
 			} catch (e: Throwable) {
 				try {
 					DocumentFile.fromSingleUri(applicationContext, destination)?.delete()
@@ -116,11 +118,13 @@ class BackupService : BaseBackupRestoreService() {
 
 		private const val TAG = "BACKUP"
 		private const val FOREGROUND_NOTIFICATION_ID = 33
+		private const val KEY_FORK_COMPATIBLE = "fork_compatible"
 
 		@CheckResult
-		fun start(context: Context, uri: Uri): Boolean = try {
+		fun start(context: Context, uri: Uri, forkCompatible: Boolean = false): Boolean = try {
 			val intent = Intent(context, BackupService::class.java)
 			intent.putExtra(AppRouter.KEY_DATA, uri.toString())
+			intent.putExtra(KEY_FORK_COMPATIBLE, forkCompatible)
 			ContextCompat.startForegroundService(context, intent)
 			true
 		} catch (e: Exception) {
@@ -128,4 +132,5 @@ class BackupService : BaseBackupRestoreService() {
 			false
 		}
 	}
+
 }

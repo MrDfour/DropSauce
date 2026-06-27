@@ -23,7 +23,9 @@ import kotlinx.serialization.serializer
 import org.koitharu.kotatsu.backup.local.data.model.BackupIndex
 import org.koitharu.kotatsu.backup.local.data.model.BackupPrimitive
 import org.koitharu.kotatsu.backup.local.data.model.BookmarkBackup
+import org.koitharu.kotatsu.backup.local.data.model.ForkCompatibleBookmarkBackup
 import org.koitharu.kotatsu.backup.local.data.model.CategoryBackup
+
 import org.koitharu.kotatsu.backup.local.data.model.ChapterBackup
 import org.koitharu.kotatsu.backup.local.data.model.FavouriteBackup
 import org.koitharu.kotatsu.backup.local.data.model.HistoryBackup
@@ -68,6 +70,7 @@ class LocalBackupRepository @Inject constructor(
 	suspend fun createBackup(
 		output: ZipOutputStream,
 		progress: FlowCollector<Progress>?,
+		forkCompatible: Boolean = false,
 	) {
 		val sections = BackupSection.entries
 		progress?.emit(Progress.INDETERMINATE)
@@ -98,13 +101,25 @@ class LocalBackupRepository @Inject constructor(
 					serializer = serializer(),
 				)
 
-				BackupSection.BOOKMARKS -> output.writeJsonArray(
-					section = BackupSection.BOOKMARKS,
-					data = database.getBookmarksDao().dump().map { (manga, bookmarks) ->
-						BookmarkBackup(manga, bookmarks)
-					},
-					serializer = serializer(),
-				)
+				BackupSection.BOOKMARKS -> {
+					if (forkCompatible) {
+						output.writeJsonArray(
+							section = BackupSection.BOOKMARKS,
+							data = database.getBookmarksDao().dump().map { (manga, bookmarks) ->
+								ForkCompatibleBookmarkBackup(manga, bookmarks)
+							},
+							serializer = ForkCompatibleBookmarkBackup.serializer(),
+						)
+					} else {
+						output.writeJsonArray(
+							section = BackupSection.BOOKMARKS,
+							data = database.getBookmarksDao().dump().map { (manga, bookmarks) ->
+								BookmarkBackup(manga, bookmarks)
+							},
+							serializer = serializer(),
+						)
+					}
+				}
 
 				BackupSection.SETTINGS -> output.writeJsonObject(
 					section = BackupSection.SETTINGS,

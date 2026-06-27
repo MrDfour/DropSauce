@@ -74,6 +74,15 @@ class BackupSettingsFragment : BaseComposeSettingsFragment(R.string.backup_resto
 		}
 	}
 
+	private val createForkBackupLauncher = registerForActivityResult(
+		ActivityResultContracts.CreateDocument(BackupUtils.MIME_TYPE),
+	) { uri ->
+		if (uri != null && BackupService.start(requireContext(), uri, forkCompatible = true)) {
+			Toast.makeText(requireContext(), R.string.creating_backup, Toast.LENGTH_SHORT).show()
+		}
+	}
+
+
 	private val restoreLocalBackupLauncher = registerForActivityResult(
 		ActivityResultContracts.OpenDocument(),
 	) { uri ->
@@ -113,7 +122,13 @@ class BackupSettingsFragment : BaseComposeSettingsFragment(R.string.backup_resto
 							BackupUtils.generateFileName(requireContext()),
 						)
 					},
+					onCreateForkBackup = {
+						createForkBackupLauncher.launch(
+							BackupUtils.generateFileName(requireContext()),
+						)
+					},
 					onRestoreLocal = {
+
 						restoreLocalBackupLauncher.launch(
 							arrayOf(BackupUtils.MIME_TYPE, "application/*", "*/*"),
 						)
@@ -224,6 +239,7 @@ class BackupSettingsFragment : BaseComposeSettingsFragment(R.string.backup_resto
 private fun BackupScreen(
 	onBack: () -> Unit,
 	onCreateBackup: () -> Unit,
+	onCreateForkBackup: () -> Unit,
 	onRestoreLocal: () -> Unit,
 	onOpenPeriodic: () -> Unit,
 	onRestoreFromTachiyomi: () -> Unit,
@@ -245,6 +261,16 @@ private fun BackupScreen(
 				}
 				item { pos ->
 					ActionSettingsItem(
+						title = stringResource(R.string.create_fork_backup),
+						subtitle = stringResource(R.string.create_fork_backup_summary),
+						icon = R.drawable.ic_save,
+						
+						shape = pos.shape,
+						onClick = onCreateForkBackup,
+					)
+				}
+				item { pos ->
+					ActionSettingsItem(
 						title = stringResource(R.string.restore_backup),
 						subtitle = stringResource(R.string.restore_summary),
 						icon = R.drawable.ic_revert,
@@ -253,6 +279,7 @@ private fun BackupScreen(
 						onClick = onRestoreLocal,
 					)
 				}
+
 				item { pos ->
 					NavigationSettingsItem(
 						title = stringResource(R.string.periodic_backups),
