@@ -4,21 +4,70 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.CompoundButton
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.isGone
-import androidx.core.view.isVisible
-import androidx.core.view.updatePadding
 import androidx.fragment.app.activityViewModels
-import android.view.animation.AccelerateDecelerateInterpolator
-import androidx.transition.AutoTransition
-import androidx.transition.TransitionManager
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.slider.Slider
+import android.content.res.Configuration
+import coil3.ImageLoader
+import coil3.compose.AsyncImage
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.nav.AppRouter
@@ -28,26 +77,24 @@ import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.core.prefs.ReaderMode
 import org.koitharu.kotatsu.core.ui.sheet.AdaptiveSheetBehavior
 import org.koitharu.kotatsu.core.ui.sheet.BaseAdaptiveSheet
-import org.koitharu.kotatsu.core.util.ext.consume
 import org.koitharu.kotatsu.core.util.ext.findParentCallback
-import org.koitharu.kotatsu.core.util.ext.observe
-import org.koitharu.kotatsu.core.util.ext.setValueRounded
 import org.koitharu.kotatsu.core.util.ext.viewLifecycleScope
-import org.koitharu.kotatsu.core.util.progress.IntPercentLabelFormatter
 import org.koitharu.kotatsu.databinding.SheetReaderConfigBinding
 import org.koitharu.kotatsu.reader.domain.PageLoader
 import org.koitharu.kotatsu.reader.ui.ReaderViewModel
 import org.koitharu.kotatsu.reader.ui.ScreenOrientationHelper
+import org.koitharu.kotatsu.settings.compose.DropSauceTheme
 import javax.inject.Inject
-import com.google.android.material.R as materialR
+import kotlin.math.roundToInt
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import org.koitharu.kotatsu.core.model.getTitle
+import org.koitharu.kotatsu.core.model.isLocal
+import androidx.compose.ui.BiasAlignment
+import androidx.compose.animation.core.animateFloatAsState
 
 @AndroidEntryPoint
-class ReaderConfigSheet :
-    BaseAdaptiveSheet<SheetReaderConfigBinding>(),
-    View.OnClickListener,
-    MaterialButtonToggleGroup.OnButtonCheckedListener,
-    CompoundButton.OnCheckedChangeListener,
-    Slider.OnChangeListener {
+class ReaderConfigSheet : BaseAdaptiveSheet<SheetReaderConfigBinding>() {
 
     private val viewModel by activityViewModels<ReaderViewModel>()
 
@@ -60,13 +107,11 @@ class ReaderConfigSheet :
     @Inject
     lateinit var pageLoader: PageLoader
 
+    @Inject
+    lateinit var coil: ImageLoader
+
     private lateinit var mode: ReaderMode
     private lateinit var imageServerDelegate: ImageServerDelegate
-
-    // The lock-rotation control is a checkable square button (not a CompoundButton).
-    private val lockRotationListener = MaterialButton.OnCheckedChangeListener { _, isChecked ->
-        orientationHelper.isLocked = isChecked
-    }
 
     @Inject
     lateinit var settings: AppSettings
@@ -91,204 +136,875 @@ class ReaderConfigSheet :
         savedInstanceState: Bundle?,
     ) {
         super.onViewBindingCreated(binding, savedInstanceState)
-        observeScreenOrientation()
-        binding.buttonStandard.isChecked = mode == ReaderMode.STANDARD
-        binding.buttonReversed.isChecked = mode == ReaderMode.REVERSED
-        binding.buttonWebtoon.isChecked = mode == ReaderMode.WEBTOON
-        binding.buttonVertical.isChecked = mode == ReaderMode.VERTICAL
-        binding.switchDoubleReader.isChecked = settings.isReaderDoubleOnLandscape
-        binding.switchDoubleReader.isEnabled = mode == ReaderMode.STANDARD || mode == ReaderMode.REVERSED
-        binding.switchDoubleFoldable.isChecked = settings.isReaderDoubleOnFoldable
-        binding.switchDoubleFoldable.isEnabled = binding.switchDoubleReader.isEnabled
-        binding.sliderDoubleSensitivity.setValueRounded(settings.readerDoublePagesSensitivity * 100f)
-        binding.sliderDoubleSensitivity.setLabelFormatter(IntPercentLabelFormatter(binding.root.context))
-        binding.adjustSensitivitySlider(withAnimation = false)
-
-        binding.checkableGroup.addOnButtonCheckedListener(this)
-        binding.buttonSavePage.setOnClickListener(this)
-        binding.buttonScreenRotate.setOnClickListener(this)
-        binding.buttonSettings.setOnClickListener(this)
-        binding.buttonImageServer.setOnClickListener(this)
-        binding.buttonColorFilter.setOnClickListener(this)
-        binding.buttonScrollTimer.setOnClickListener(this)
-        binding.buttonBookmark.setOnClickListener(this)
-        binding.switchDoubleReader.setOnCheckedChangeListener(this)
-        binding.switchDoubleFoldable.setOnCheckedChangeListener(this)
-        binding.switchScreenLockRotation.addOnCheckedChangeListener(lockRotationListener)
-        binding.sliderDoubleSensitivity.addOnChangeListener(this)
-
-        viewModel.isBookmarkAdded.observe(viewLifecycleOwner) {
-            binding.buttonBookmark.setText(if (it) R.string.bookmark_remove else R.string.bookmark_add)
-            binding.buttonBookmark.setIconResource(
-                if (it) R.drawable.ic_bookmark_checked else R.drawable.ic_bookmark,
-            )
-        }
-
-        viewLifecycleScope.launch {
-            val isAvailable = imageServerDelegate.isAvailable()
-            if (isAvailable) {
-                bindImageServerTitle()
+        binding.composeView.setViewCompositionStrategy(
+            ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed,
+        )
+        binding.composeView.setContent {
+            DropSauceTheme {
+                ReaderConfigContent()
             }
-            binding.buttonImageServer.isVisible = isAvailable
         }
-
-        // Open at full content height so nothing is hidden below the fold, and keep the sheet
-        // fitted to its contents so it grows from the top (the bottom button grid stays put).
-        binding.root.post { expandToContent() }
+        binding.composeView.post { expandToContent() }
     }
 
     private fun expandToContent() {
         val b = behavior ?: return
         if (b is AdaptiveSheetBehavior.Bottom) {
-            b.isFitToContents = true
+            if (isLandscape()) {
+                b.isFitToContents = false
+                val sheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+                if (sheet != null) {
+                    sheet.layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT
+                }
+            } else {
+                b.isFitToContents = true
+            }
+        } else if (b is AdaptiveSheetBehavior.Side) {
+            val sheet = dialog?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+                ?: dialog?.findViewById<View>(com.google.android.material.R.id.m3_side_sheet)
+            if (sheet != null) {
+                val displayWidth = resources.displayMetrics.widthPixels
+                sheet.layoutParams.width = (displayWidth * 0.5).toInt()
+                sheet.requestLayout()
+            }
         }
         b.state = AdaptiveSheetBehavior.STATE_EXPANDED
     }
 
+    private fun isLandscape(): Boolean {
+        return resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    }
+
     override fun onApplyWindowInsets(v: View, insets: WindowInsetsCompat): WindowInsetsCompat {
-        val typeMask = WindowInsetsCompat.Type.systemBars()
-        viewBinding?.scrollView?.updatePadding(
-            bottom = insets.getInsets(typeMask).bottom,
-        )
-        return insets.consume(v, typeMask, bottom = true)
+        return insets
     }
 
-    override fun onClick(v: View) {
-        when (v.id) {
-            R.id.button_settings -> {
-                router.openReaderSettings()
-                dismissAllowingStateLoss()
-            }
+    @Composable
+    private fun ReaderConfigContent() {
+        val context = LocalContext.current
+        var currentMode by remember { mutableStateOf(mode) }
 
-            R.id.button_scroll_timer -> {
-                findParentCallback(Callback::class.java)?.onScrollTimerClick(false) ?: return
-                dismissAllowingStateLoss()
-            }
+        // Pager State for 2 pages (0: Options, 1: Info)
+        val pagerState = rememberPagerState(pageCount = { 2 })
+        val scope = rememberCoroutineScope()
 
-            R.id.button_save_page -> {
-                findParentCallback(Callback::class.java)?.onSavePageClick() ?: return
-                dismissAllowingStateLoss()
-            }
+        // Settings states
+        var isDoubleOnLandscape by remember { mutableStateOf(settings.isReaderDoubleOnLandscape) }
+        var isDoubleOnFoldable by remember { mutableStateOf(settings.isReaderDoubleOnFoldable) }
+        var sensitivity by remember { mutableFloatStateOf(settings.readerDoublePagesSensitivity * 100f) }
 
-            R.id.button_screen_rotate -> {
-                orientationHelper.isLandscape = !orientationHelper.isLandscape
-            }
+        // Image Server states
+        var isImageServerAvailable by remember { mutableStateOf(false) }
+        var imageServerValue by remember { mutableStateOf<String?>(null) }
 
-            R.id.button_bookmark -> {
-                viewModel.toggleBookmark()
-            }
+        LaunchedEffect(Unit) {
+            isImageServerAvailable = imageServerDelegate.isAvailable()
+            imageServerValue = imageServerDelegate.getValue()
+        }
 
-            R.id.button_color_filter -> {
-                val page = viewModel.getCurrentPage() ?: return
-                val manga = viewModel.getMangaOrNull() ?: return
-                router.openColorFilterConfig(manga, page)
-            }
+        // StateFlow observations from ViewModel and OrientationHelper flow
+        val isBookmarkAdded by viewModel.isBookmarkAdded.collectAsState()
+        val isAutoRotationEnabled by orientationHelper.observeAutoOrientation().collectAsState(initial = false)
+        val uiState by viewModel.uiState.collectAsState()
+        val manga = remember(uiState) { viewModel.getMangaOrNull() }
 
-            R.id.button_image_server -> viewLifecycleScope.launch {
-                if (imageServerDelegate.showDialog(v.context)) {
-                    bindImageServerTitle()
-                    pageLoader.invalidate(clearCache = true)
-                    viewModel.switchChapterBy(0)
+        val callback = remember { findParentCallback(Callback::class.java) }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // 1. Swipeable Pager Content
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize(
+                            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                        ),
+                ) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                    ) { page ->
+                        when (page) {
+                            0 -> { // Options Page
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    ReadModeSection(
+                                        selectedMode = currentMode,
+                                        onModeSelected = { newMode ->
+                                            if (newMode != currentMode) {
+                                                callback?.onReaderModeChanged(newMode)
+                                                currentMode = newMode
+                                            }
+                                        },
+                                    )
+
+                                    DoublePageConfigSection(
+                                        isModeStandardOrReversed = currentMode == ReaderMode.STANDARD || currentMode == ReaderMode.REVERSED,
+                                        isDoubleOnLandscape = isDoubleOnLandscape,
+                                        onDoubleOnLandscapeChange = { enabled ->
+                                            settings.isReaderDoubleOnLandscape = enabled
+                                            isDoubleOnLandscape = enabled
+                                            callback?.onDoubleModeChanged(enabled)
+                                        },
+                                        isDoubleOnFoldable = isDoubleOnFoldable,
+                                        onDoubleOnFoldableChange = { enabled ->
+                                            settings.isReaderDoubleOnFoldable = enabled
+                                            isDoubleOnFoldable = enabled
+                                            callback?.onDoubleModeChanged(settings.isReaderDoubleOnLandscape)
+                                        },
+                                        sensitivity = sensitivity,
+                                        onSensitivityChange = { value ->
+                                            settings.readerDoublePagesSensitivity = value / 100f
+                                            sensitivity = value
+                                        },
+                                    )
+
+                                    Spacer(modifier = Modifier.height(84.dp))
+                                }
+                            }
+
+                            1 -> { // Info & Tools Page
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    if (isImageServerAvailable) {
+                                        ImageServerItem(
+                                            value = imageServerValue,
+                                            onClick = {
+                                                viewLifecycleScope.launch {
+                                                    if (imageServerDelegate.showDialog(context)) {
+                                                        imageServerValue = imageServerDelegate.getValue()
+                                                        pageLoader.invalidate(clearCache = true)
+                                                        viewModel.switchChapterBy(0)
+                                                    }
+                                                }
+                                            },
+                                        )
+                                    }
+
+                                    ToolsGridSection(
+                                        isAutoRotationEnabled = isAutoRotationEnabled,
+                                        isOrientationLocked = orientationHelper.isLocked,
+                                        isBookmarkAdded = isBookmarkAdded,
+                                        onSaveClick = {
+                                            callback?.onSavePageClick()
+                                            dismissAllowingStateLoss()
+                                        },
+                                        onOrientationClick = {
+                                            orientationHelper.toggleScreenOrientation()
+                                        },
+                                        onScrollTimerClick = {
+                                            callback?.onScrollTimerClick(false)
+                                            dismissAllowingStateLoss()
+                                        },
+                                        onColorFilterClick = {
+                                            val page = viewModel.getCurrentPage()
+                                            val manga = viewModel.getMangaOrNull()
+                                            if (page != null && manga != null) {
+                                                router.openColorFilterConfig(manga, page)
+                                            }
+                                        },
+                                        onBookmarkClick = {
+                                            viewModel.toggleBookmark()
+                                        },
+                                        onSettingsClick = {
+                                            router.openReaderSettings()
+                                            dismissAllowingStateLoss()
+                                        },
+                                    )
+
+                                    Spacer(modifier = Modifier.height(84.dp))
+                                }
+                            }
+                        }
+                    }
                 }
             }
+
+            // 2. Bottom Floating Capsule Tab Switcher
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+            ) {
+                BottomPillTabBar(
+                    currentPage = pagerState.currentPage,
+                    onTabClick = { index ->
+                        scope.launch {
+                            pagerState.animateScrollToPage(index)
+                        }
+                    },
+                )
+            }
         }
     }
 
-    override fun onCheckedChanged(buttonView: CompoundButton, isChecked: Boolean) {
-        when (buttonView.id) {
-            R.id.switch_double_reader -> {
-                settings.isReaderDoubleOnLandscape = isChecked
-                viewBinding?.adjustSensitivitySlider(withAnimation = true)
-                findParentCallback(Callback::class.java)?.onDoubleModeChanged(isChecked)
-            }
-
-            R.id.switch_double_foldable -> {
-                settings.isReaderDoubleOnFoldable = isChecked
-                // Re-evaluate double-page considering foldable state and current manual toggle
-                findParentCallback(Callback::class.java)?.onDoubleModeChanged(settings.isReaderDoubleOnLandscape)
-            }
-        }
-    }
-
-    override fun onValueChange(slider: Slider, value: Float, fromUser: Boolean) {
-        settings.readerDoublePagesSensitivity = value / 100f
-    }
-
-    override fun onButtonChecked(
-        group: MaterialButtonToggleGroup?,
-        checkedId: Int,
-        isChecked: Boolean,
+    @Composable
+    private fun BottomPillTabBar(
+        currentPage: Int,
+        onTabClick: (Int) -> Unit,
     ) {
-        if (!isChecked) {
-            return
-        }
-        val newMode = when (checkedId) {
-            R.id.button_standard -> ReaderMode.STANDARD
-            R.id.button_webtoon -> ReaderMode.WEBTOON
-            R.id.button_reversed -> ReaderMode.REVERSED
-            R.id.button_vertical -> ReaderMode.VERTICAL
-            else -> return
-        }
-        viewBinding?.run {
-            switchDoubleReader.isEnabled = newMode == ReaderMode.STANDARD || newMode == ReaderMode.REVERSED
-            switchDoubleFoldable.isEnabled = switchDoubleReader.isEnabled
-            adjustSensitivitySlider(withAnimation = true)
-        }
-        if (newMode == mode) {
-            return
-        }
-        findParentCallback(Callback::class.java)?.onReaderModeChanged(newMode) ?: return
-        mode = newMode
-    }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f),
+                shadowElevation = 6.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                modifier = Modifier
+                    .width(280.dp)
+                    .height(52.dp),
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val targetBias = if (currentPage == 0) -1f else 1f
+                    val animatedBias by animateFloatAsState(
+                        targetValue = targetBias,
+                        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                        label = "pill_bias",
+                    )
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.5f)
+                            .padding(4.dp)
+                            .align(BiasAlignment(horizontalBias = animatedBias, verticalBias = 0f))
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
 
-    private fun observeScreenOrientation() {
-        orientationHelper.observeAutoOrientation()
-            .onEach {
-                with(requireViewBinding()) {
-                    buttonScreenRotate.isGone = it
-                    switchScreenLockRotation.isVisible = it
-                    updateOrientationLockSwitch()
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val tabs = listOf(
+                            "Read Mode" to (R.drawable.ic_book_page to 0),
+                            "Tools" to (R.drawable.ic_grid to 1)
+                        )
+                        tabs.forEach { (title, pair) ->
+                            val (iconRes, index) = pair
+                            val isSelected = currentPage == index
+                            val contentColor by animateColorAsState(
+                                targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                label = "pill_tab_content_color",
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null,
+                                    ) { onTabClick(index) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(iconRes),
+                                        contentDescription = title,
+                                        tint = contentColor,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = contentColor,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-            }.launchIn(viewLifecycleScope)
-    }
-
-    private fun updateOrientationLockSwitch() {
-        val button = viewBinding?.switchScreenLockRotation ?: return
-        button.removeOnCheckedChangeListener(lockRotationListener)
-        button.isChecked = orientationHelper.isLocked
-        button.addOnCheckedChangeListener(lockRotationListener)
-    }
-
-    private fun bindImageServerTitle() {
-        viewBinding?.buttonImageServer?.text = getString(
-            R.string.inline_preference_pattern,
-            getString(R.string.image_server),
-            imageServerDelegate.getValue() ?: getString(R.string.automatic),
-        )
-    }
-
-    private fun SheetReaderConfigBinding.adjustSensitivitySlider(withAnimation: Boolean) {
-        val isSubOptionsVisible = switchDoubleReader.isEnabled && switchDoubleReader.isChecked
-        val needTransition = withAnimation && (
-            (isSubOptionsVisible != sliderDoubleSensitivity.isVisible) ||
-                (isSubOptionsVisible != textDoubleSensitivity.isVisible) ||
-                (isSubOptionsVisible != switchDoubleFoldable.isVisible)
-            )
-        if (needTransition) {
-            val transition = AutoTransition().apply {
-                duration = 250L
-                interpolator = AccelerateDecelerateInterpolator()
             }
-            // Animate on the sheet container so its height re-fits smoothly (the bottom grid
-            // stays anchored while the section above grows/shrinks) instead of snapping.
-            val sceneRoot = dialog?.findViewById<ViewGroup>(materialR.id.coordinator)
-                ?: dialog?.findViewById<ViewGroup>(materialR.id.design_bottom_sheet)
-                ?: layoutMain
-            TransitionManager.beginDelayedTransition(sceneRoot, transition)
         }
-        sliderDoubleSensitivity.isVisible = isSubOptionsVisible
-        textDoubleSensitivity.isVisible = isSubOptionsVisible
-        switchDoubleFoldable.isVisible = isSubOptionsVisible
+    }
+
+    @Composable
+    private fun ImageServerItem(
+        value: String?,
+        onClick: () -> Unit,
+    ) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_images),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.image_server),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = value ?: stringResource(R.string.automatic),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    painter = painterResource(R.drawable.ic_expand_more),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun ReadModeSection(
+        selectedMode: ReaderMode,
+        onModeSelected: (ReaderMode) -> Unit,
+    ) {
+        val modes = listOf(
+            ReaderMode.STANDARD to (R.string.standard to R.drawable.ic_reader_ltr),
+            ReaderMode.REVERSED to (R.string.r_to_l to R.drawable.ic_reader_rtl),
+            ReaderMode.VERTICAL to (R.string.vertical to R.drawable.ic_reader_vertical),
+            ReaderMode.WEBTOON to (R.string.webtoon to R.drawable.ic_script),
+        )
+        val selectedIndex = modes.indexOfFirst { it.first == selectedMode }.coerceAtLeast(0)
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .padding(6.dp),
+                ) {
+                    val targetBias = when (selectedIndex) {
+                        0 -> -1f
+                        1 -> -1f / 3f
+                        2 -> 1f / 3f
+                        3 -> 1f
+                        else -> -1f
+                    }
+                    val animatedBias by animateFloatAsState(
+                        targetValue = targetBias,
+                        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                        label = "mode_highlighter",
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.25f)
+                            .align(BiasAlignment(horizontalBias = animatedBias, verticalBias = 0f))
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        modes.forEachIndexed { index, (mode, pair) ->
+                            val (labelRes, iconRes) = pair
+                            val isSelected = selectedMode == mode
+                            val contentColor by animateColorAsState(
+                                targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                label = "segment_fg_$index",
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null,
+                                    ) { onModeSelected(mode) },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(iconRes),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = contentColor,
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = stringResource(labelRes),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = contentColor,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text(
+                text = stringResource(R.string.reader_mode_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+    }
+
+    @Composable
+    private fun DoublePageConfigSection(
+        isModeStandardOrReversed: Boolean,
+        isDoubleOnLandscape: Boolean,
+        onDoubleOnLandscapeChange: (Boolean) -> Unit,
+        isDoubleOnFoldable: Boolean,
+        onDoubleOnFoldableChange: (Boolean) -> Unit,
+        sensitivity: Float,
+        onSensitivityChange: (Float) -> Unit,
+    ) {
+        val sectionAlpha = if (isModeStandardOrReversed) 1f else 0.38f
+
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(sectionAlpha)
+                    .padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Toggle 1: Use two pages in landscape
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = isModeStandardOrReversed) { onDoubleOnLandscapeChange(!isDoubleOnLandscape) }
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_split_horizontal),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = stringResource(R.string.use_two_pages_landscape),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = isDoubleOnLandscape,
+                        onCheckedChange = onDoubleOnLandscapeChange,
+                        enabled = isModeStandardOrReversed,
+                    )
+                }
+
+                // Sub-options
+                val subOptionsAlpha = if (isModeStandardOrReversed && isDoubleOnLandscape) 1f else 0.38f
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .alpha(subOptionsAlpha),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // Toggle 2: Auto double on foldable
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = isModeStandardOrReversed && isDoubleOnLandscape) { onDoubleOnFoldableChange(!isDoubleOnFoldable) }
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Spacer(modifier = Modifier.width(38.dp)) // indentation for sub-option
+                        Text(
+                            text = stringResource(R.string.auto_double_foldable),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(
+                            checked = isDoubleOnFoldable,
+                            onCheckedChange = onDoubleOnFoldableChange,
+                            enabled = isModeStandardOrReversed && isDoubleOnLandscape,
+                        )
+                    }
+
+                    // Slider: Scroll sensitivity
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(modifier = Modifier.width(38.dp))
+                                Text(
+                                    text = stringResource(R.string.two_page_scroll_sensitivity),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            Text(
+                                text = "${sensitivity.roundToInt()}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isModeStandardOrReversed && isDoubleOnLandscape) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(modifier = Modifier.width(38.dp))
+                            Slider(
+                                value = sensitivity,
+                                onValueChange = onSensitivityChange,
+                                valueRange = 0f..100f,
+                                enabled = isModeStandardOrReversed && isDoubleOnLandscape,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ToolsGridSection(
+        isAutoRotationEnabled: Boolean,
+        isOrientationLocked: Boolean,
+        isBookmarkAdded: Boolean,
+        onSaveClick: () -> Unit,
+        onOrientationClick: () -> Unit,
+        onScrollTimerClick: () -> Unit,
+        onColorFilterClick: () -> Unit,
+        onBookmarkClick: () -> Unit,
+        onSettingsClick: () -> Unit,
+    ) {
+        // Determine rotation values
+        val rotationTitle = if (isAutoRotationEnabled) {
+            R.string.lock_screen_rotation
+        } else {
+            R.string.rotate_screen
+        }
+        val rotationIcon = if (isAutoRotationEnabled) {
+            R.drawable.ic_screen_rotation_lock
+        } else {
+            R.drawable.ic_screen_rotation
+        }
+        val isRotationChecked = isAutoRotationEnabled && isOrientationLocked
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // Row 1: Save Page, Rotation (Pills)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                ToolPillCard(
+                    icon = R.drawable.ic_save,
+                    label = stringResource(R.string.save_page),
+                    onClick = onSaveClick,
+                    modifier = Modifier.weight(1f),
+                )
+                ToolPillCard(
+                    icon = rotationIcon,
+                    label = stringResource(rotationTitle),
+                    onClick = onOrientationClick,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            // Row 2: Scroll Timer, Color correction (Squares)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                ToolGridCard(
+                    icon = R.drawable.ic_timer,
+                    label = stringResource(R.string.automatic_scroll),
+                    onClick = onScrollTimerClick,
+                    modifier = Modifier.weight(1f),
+                )
+                ToolGridCard(
+                    icon = R.drawable.ic_appearance,
+                    label = stringResource(R.string.color_correction),
+                    onClick = onColorFilterClick,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            // Row 3: Settings Card (Wide) | Bookmark Button (Round)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                ToolWideCard(
+                    icon = R.drawable.ic_settings,
+                    title = stringResource(R.string.settings),
+                    subtitle = "Advanced reader options",
+                    onClick = onSettingsClick,
+                    modifier = Modifier.weight(1f),
+                )
+                ToolGridCard(
+                    icon = if (isBookmarkAdded) R.drawable.ic_bookmark_checked else R.drawable.ic_bookmark,
+                    label = null,
+                    checked = isBookmarkAdded,
+                    onClick = onBookmarkClick,
+                    modifier = Modifier.size(96.dp),
+                    shape = CircleShape,
+                    iconSize = 36.dp,
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun ToolWideCard(
+        icon: Int,
+        title: String,
+        subtitle: String,
+        checked: Boolean = false,
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+    ) {
+        val containerColor = if (checked) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        }
+
+        val contentColor = if (checked) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+
+        val iconColor = if (checked) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(24.dp),
+            color = containerColor,
+            contentColor = contentColor,
+            modifier = modifier.height(96.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(icon),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = iconColor,
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (checked) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    painter = painterResource(R.drawable.ic_expand_more),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(-90f),
+                    tint = if (checked) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun ToolGridCard(
+        icon: Int,
+        label: String?,
+        checked: Boolean = false,
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+        shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
+        iconSize: androidx.compose.ui.unit.Dp = 28.dp,
+    ) {
+        val containerColor = if (checked) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        }
+
+        val contentColor = if (checked) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+
+        val iconColor = if (checked) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+
+        Surface(
+            onClick = onClick,
+            shape = shape,
+            color = containerColor,
+            contentColor = contentColor,
+            modifier = modifier.height(96.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    painter = painterResource(icon),
+                    contentDescription = label,
+                    modifier = Modifier.size(iconSize),
+                    tint = iconColor,
+                )
+                if (label != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ToolPillCard(
+        icon: Int,
+        label: String,
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+    ) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(48.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = modifier.height(96.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        painter = painterResource(icon),
+                        contentDescription = label,
+                        modifier = Modifier.size(28.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
     }
 
     interface Callback {

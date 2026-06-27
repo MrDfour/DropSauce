@@ -230,13 +230,13 @@ class ReaderViewModel @Inject constructor(
     }
 
     fun switchMode(newMode: ReaderMode) {
+        readerMode.value = newMode
         launchJob {
             val manga = checkNotNull(getMangaOrNull())
             dataRepository.saveReaderMode(
                 manga = manga,
                 mode = newMode,
             )
-            readerMode.value = newMode
             content.update {
                 it.copy(state = getCurrentState())
             }

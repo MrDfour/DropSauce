@@ -117,12 +117,11 @@ class ChaptersPagesSheet : BaseAdaptiveSheet<SheetChaptersPagesBinding>(),
 
 	override fun onStart() {
 		super.onStart()
+		val sheetDialog = dialog as? BottomSheetDialog
+		applyDetailsSheetSurface(sheetDialog)
 		// In the details screen the sheet opens at a centred, half-expanded position. Keep nested list
 		// swipes for the RecyclerViews; only direct drags on the header/toolbar should move the sheet.
-		// The reader hosts the same sheet but keeps its own behaviour, so this is gated to details.
 		if (viewModel is DetailsViewModel) {
-			val sheetDialog = dialog as? BottomSheetDialog
-			applyDetailsSheetSurface(sheetDialog)
 			sheetDialog?.behavior?.apply {
 				isFitToContents = false
 				isHideable = true
