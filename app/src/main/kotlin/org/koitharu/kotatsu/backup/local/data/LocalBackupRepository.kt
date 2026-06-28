@@ -125,12 +125,14 @@ class LocalBackupRepository @Inject constructor(
 					section = BackupSection.SETTINGS,
 					data = dumpAppSettings(),
 					serializer = serializer(),
+					forkCompatible = forkCompatible,
 				)
 
 				BackupSection.SETTINGS_READER_GRID -> output.writeJsonObject(
 					section = BackupSection.SETTINGS_READER_GRID,
 					data = dumpReaderGridSettings(),
 					serializer = serializer(),
+					forkCompatible = forkCompatible,
 				)
 
 				BackupSection.SOURCES -> output.writeJsonArray(
@@ -266,10 +268,17 @@ class LocalBackupRepository @Inject constructor(
 		section: BackupSection,
 		data: T,
 		serializer: SerializationStrategy<T>,
+		forkCompatible: Boolean = false,
 	) {
 		putNextEntry(ZipEntry(section.entryName))
 		try {
+			if (forkCompatible) {
+				write("[")
+			}
 			json.encodeToStream(serializer, data, this)
+			if (forkCompatible) {
+				write("]")
+			}
 		} finally {
 			closeEntry()
 			flush()
