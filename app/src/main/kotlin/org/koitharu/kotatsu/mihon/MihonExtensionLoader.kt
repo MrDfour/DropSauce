@@ -320,10 +320,14 @@ class MihonExtensionLoader @Inject constructor(
 			?: versionName.split('.').take(2).joinToString(".").toDoubleOrNull()
 	}
 
-	private fun readLibVersion(metaData: Bundle, versionName: String): Double? =
-		metaData.getDouble(METADATA_EXTENSION_LIB, 0.0)
-			.takeUnless { it == 0.0 }
-			?: parseLibVersion(versionName)
+	@Suppress("DEPRECATION")
+	private fun readLibVersion(metaData: Bundle, versionName: String): Double? = runCatching {
+		when (val raw = metaData.get(METADATA_EXTENSION_LIB)) {
+			is Number -> raw.toDouble()
+			is String -> raw.toDoubleOrNull()
+			else -> null
+		}
+	}.getOrNull()?.takeUnless { it == 0.0 } ?: parseLibVersion(versionName)
 
 	private fun extractLanguage(packageName: String): String {
 		val parts = packageName.split('.')
