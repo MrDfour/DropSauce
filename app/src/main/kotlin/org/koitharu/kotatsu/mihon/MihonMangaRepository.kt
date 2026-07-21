@@ -139,10 +139,11 @@ class MihonMangaRepository(
 		}
 
 		// Remember whether the source has more pages for the next getList() call with this key.
-		state.hasMorePages = mangasPage.hasNextPage
+		state.hasMorePages = mangasPage?.hasNextPage ?: false
 
 		val httpSource = mihonSource as? HttpSource
-		mangasPage.mangas.map { sManga ->
+		val mangas = mangasPage?.mangas.orEmpty()
+		mangas.filterNotNull().map { sManga ->
 			// New-API extensions stash the manga id in memo and require it back in getMangaUpdate.
 			// Kotatsu's Manga model can't carry it, so sidecar it now — details restores it.
 			sourceMetadata.saveMemo(source.sourceId, sManga.url, sManga)
@@ -166,6 +167,8 @@ class MihonMangaRepository(
 				throw NotFoundException("HTTP ${e.code}", manga.publicUrl.ifBlank { manga.url })
 			}
 			throw e
+		} catch (e: Exception) {
+			throw translateExtensionException(e)
 		}
 	}
 
@@ -189,13 +192,16 @@ class MihonMangaRepository(
 		} catch (e: Exception) {
 			throw translateExtensionException(e)
 		}
-		val details = update.manga
+		val details = update.manga ?: throw org.koitharu.kotatsu.parsers.exception.ParseException("Source returned null manga details", sManga.url)
 		// Many extensions never set url on the details SManga (Mihon's copyFrom skips it),
 		// so reading the lateinit property directly would crash the whole details load.
-		val detailsUrl = try { details.url } catch (_: UninitializedPropertyAccessException) { sManga.url }
-		val rawChapters = update.chapters.onEach { chapter ->
-			chapter.url = normalizeChapterUrl(chapter.url, sManga.url, detailsUrl)
-		}
+		val detailsUrl = try { details.url } catch (_: UninitializedPropertyAccessException) { sManga.url } catch (_: NullPointerException) { sManga.url }
+		@Suppress("UNCHECKED_CAST")
+		val rawChapters = (update.chapters as List<eu.kanade.tachiyomi.source.model.SChapter?>?)
+			?.filterNotNull()
+			?.onEach { chapter ->
+				chapter.url = normalizeChapterUrl(chapter.url, sManga.url, detailsUrl)
+			}.orEmpty()
 
 		// Deduplicate by URL — some sources accidentally return the same chapter twice.
 		val uniqueChapters = rawChapters.distinctBy { it.url }
@@ -218,7 +224,7 @@ class MihonMangaRepository(
 			uniqueChapters.filter { it.memo.isNotEmpty() }.associate { it.url to it.memo },
 		)
 
-		val mangaTitle = try { sManga.title } catch (_: UninitializedPropertyAccessException) { "" }
+		val mangaTitle = try { sManga.title } catch (_: UninitializedPropertyAccessException) { "" } catch (_: NullPointerException) { "" }
 
 		// Mihon convention: getChapterList() returns chapters newest-first, while Kotatsu's chapter
 		// model and update tracker expect oldest-first (the newest chapter is last). Reverse the
@@ -243,13 +249,13 @@ class MihonMangaRepository(
 		// cannot represent them, so retain them in the private compatibility sidecar.
 		sourceMetadata.save(source.sourceId, details.url, details)
 
-		val detailsTitle = try { details.title } catch (_: UninitializedPropertyAccessException) { "" }
+		val detailsTitle = try { details.title } catch (_: UninitializedPropertyAccessException) { "" } catch (_: NullPointerException) { "" }
 		if (detailsTitle.isBlank()) {
 			details.title = sManga.title
 		}
 
-		val detailsThumb = try { details.thumbnail_url } catch (_: UninitializedPropertyAccessException) { null }
-		val searchThumb = try { sManga.thumbnail_url } catch (_: UninitializedPropertyAccessException) { null }
+		val detailsThumb = try { details.thumbnail_url } catch (_: UninitializedPropertyAccessException) { null } catch (_: NullPointerException) { null }
+		val searchThumb = try { sManga.thumbnail_url } catch (_: UninitializedPropertyAccessException) { null } catch (_: NullPointerException) { null }
 
 		if (detailsThumb.isNullOrBlank() || detailsThumb == details.url || detailsThumb == sManga.url) {
 			if (!searchThumb.isNullOrBlank()) {
@@ -278,7 +284,7 @@ class MihonMangaRepository(
 		// contains null elements at runtime despite the non-null Kotlin type. Filtering here
 		// prevents the "Attempt to invoke virtual method on a null object reference" NPE.
 		@Suppress("UNCHECKED_CAST")
-		val pages = (rawPages as List<Page?>).filterNotNull()
+		val pages = (rawPages as List<Page?>?)?.filterNotNull().orEmpty()
 		pages.mapIndexed { index, page ->
 			val mapped = page.toMangaPage(source, chapter.url)
 			when {

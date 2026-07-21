@@ -110,7 +110,6 @@ open class BaseApp : Application(), Configuration.Provider {
 				title = getString(R.string.error_occurred)
 				positiveButtonText = getString(R.string.close)
 				resIcon = R.drawable.ic_alert_outline
-				resTheme = android.R.style.Theme_Material_Light_Dialog_Alert
 			}
 		}
 	}
