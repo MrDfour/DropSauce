@@ -316,18 +316,35 @@ class MihonExtensionLoader @Inject constructor(
 	}
 
 	private fun parseLibVersion(versionName: String): Double? {
-		return versionName.substringBeforeLast('.').toDoubleOrNull()
-			?: versionName.split('.').take(2).joinToString(".").toDoubleOrNull()
+		val parts = versionName.trim().split('.')
+		if (parts.size >= 2) {
+			val majorMinor = "${parts[0]}.${parts[1]}"
+			val parsed = majorMinor.toDoubleOrNull()
+			if (parsed != null) return parsed
+		}
+		val raw = versionName.trim().toDoubleOrNull() ?: return null
+		return if (raw >= 10.0) raw / 10.0 else raw
 	}
 
 	@Suppress("DEPRECATION")
-	private fun readLibVersion(metaData: Bundle, versionName: String): Double? = runCatching {
-		when (val raw = metaData.get(METADATA_EXTENSION_LIB)) {
-			is Number -> raw.toDouble()
-			is String -> raw.toDoubleOrNull()
-			else -> null
+	private fun readLibVersion(metaData: Bundle, versionName: String): Double? {
+		val rawString = runCatching {
+			when (val raw = metaData.get(METADATA_EXTENSION_LIB)) {
+				is Number -> raw.toString()
+				is String -> raw
+				else -> null
+			}
+		}.getOrNull()
+
+		if (!rawString.isNullOrBlank()) {
+			val parsed = parseLibVersion(rawString)
+			if (parsed != null && parsed != 0.0) {
+				return parsed
+			}
 		}
-	}.getOrNull()?.takeUnless { it == 0.0 } ?: parseLibVersion(versionName)
+
+		return parseLibVersion(versionName)
+	}
 
 	private fun extractLanguage(packageName: String): String {
 		val parts = packageName.split('.')
