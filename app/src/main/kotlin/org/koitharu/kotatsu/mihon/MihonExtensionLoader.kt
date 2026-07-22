@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withPermit
 import org.koitharu.kotatsu.mihon.compat.KotoInjektBridge
 import org.koitharu.kotatsu.mihon.model.MihonExtensionInfo
 import org.koitharu.kotatsu.mihon.model.MihonLoadResult
@@ -117,10 +118,16 @@ class MihonExtensionLoader @Inject constructor(
 
 	suspend fun loadExtensions(context: Context): List<MihonLoadResult> = withContext(Dispatchers.IO) {
 		injektBridge.get().initialize()
-		getInstalledPackages(context.packageManager)
+		val extensions = getInstalledPackages(context.packageManager)
 			.filter(::isPackageAnExtension)
-			.map { pkgInfo -> async { loadExtension(context, pkgInfo) } }
-			.awaitAll()
+		val semaphore = kotlinx.coroutines.sync.Semaphore(4)
+		extensions.map { pkgInfo ->
+			async {
+				semaphore.withPermit {
+					loadExtension(context, pkgInfo)
+				}
+			}
+		}.awaitAll()
 	}
 
 	/**

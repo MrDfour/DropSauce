@@ -296,7 +296,7 @@ class ReaderActivity :
             readerManager.replace(mode)
         }
         invalidateOptionsMenu()
-        if (viewBinding.appbarTop.isVisible) {
+        if (viewBinding.appbarTop.isVisible && viewModel.content.value.pages.isNotEmpty()) {
             lifecycle.postDelayed(TimeUnit.SECONDS.toMillis(1), hideUiRunnable)
         }
         viewBinding.actionsView.setSliderReversed(
@@ -312,6 +312,9 @@ class ReaderActivity :
             val transition = Fade().addTarget(viewBinding.layoutLoading)
             TransitionManager.beginDelayedTransition(viewBinding.root, transition)
             viewBinding.layoutLoading.isVisible = showLoadingLayout
+        }
+        if (!hasPages && !isLoading) {
+            setUiIsVisible(true)
         }
         if (isLoading && hasPages) {
             viewBinding.toastView.show(R.string.loading_)
