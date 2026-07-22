@@ -74,6 +74,14 @@ class BackupSettingsFragment : BaseComposeSettingsFragment(R.string.backup_resto
 		}
 	}
 
+	private val createMihonBackupLauncher = registerForActivityResult(
+		ActivityResultContracts.CreateDocument("application/gzip"),
+	) { uri ->
+		if (uri != null) {
+			runMihonExportJob(uri)
+		}
+	}
+
 	private val restoreLocalBackupLauncher = registerForActivityResult(
 		ActivityResultContracts.OpenDocument(),
 	) { uri ->
@@ -112,6 +120,11 @@ class BackupSettingsFragment : BaseComposeSettingsFragment(R.string.backup_resto
 							BackupUtils.generateFileName(requireContext()),
 						)
 					},
+					onExportMihon = {
+						createMihonBackupLauncher.launch(
+							org.koitharu.kotatsu.backup.MihonBackupExporter.getFilename(),
+						)
+					},
 					onRestoreLocal = {
 						restoreLocalBackupLauncher.launch(
 							arrayOf(BackupUtils.MIME_TYPE, "application/*", "*/*"),
@@ -133,6 +146,7 @@ class BackupSettingsFragment : BaseComposeSettingsFragment(R.string.backup_resto
 			}
 		}
 	}
+
 
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
@@ -159,6 +173,20 @@ class BackupSettingsFragment : BaseComposeSettingsFragment(R.string.backup_resto
 				}
 			}
 		}.show()
+	}
+
+	private fun runMihonExportJob(uri: Uri) {
+		lifecycleScope.launch {
+			Toast.makeText(requireContext(), R.string.creating_backup, Toast.LENGTH_SHORT).show()
+			val result = runCatching {
+				backupManager.exportBackup(uri)
+			}
+			val message = result.fold(
+				onSuccess = { getString(R.string.mihon_backup_created) },
+				onFailure = { it.getDisplayMessage(resources) },
+			)
+			Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+		}
 	}
 
 	private fun runMihonRestoreJob(uri: Uri, options: Options) {
@@ -222,6 +250,7 @@ class BackupSettingsFragment : BaseComposeSettingsFragment(R.string.backup_resto
 @Composable
 private fun BackupScreen(
 	onCreateBackup: () -> Unit,
+	onExportMihon: () -> Unit,
 	onRestoreLocal: () -> Unit,
 	onOpenPeriodic: () -> Unit,
 	onRestoreFromTachiyomi: () -> Unit,
@@ -239,6 +268,16 @@ private fun BackupScreen(
 						
 						shape = pos.shape,
 						onClick = onCreateBackup,
+					)
+				}
+				item { pos ->
+					ActionSettingsItem(
+						title = stringResource(R.string.export_mihon_backup),
+						subtitle = stringResource(R.string.export_mihon_backup_summary),
+						icon = R.drawable.ic_save,
+
+						shape = pos.shape,
+						onClick = onExportMihon,
 					)
 				}
 				item { pos ->

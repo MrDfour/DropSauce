@@ -57,7 +57,10 @@ class MihonBackupManager @Inject constructor(
     private val db: MangaDatabase,
     private val settings: AppSettings,
     private val mihonExtensionManager: MihonExtensionManager,
+    private val exporter: MihonBackupExporter,
 ) {
+
+    suspend fun exportBackup(uri: Uri): String = exporter.exportBackup(uri)
 
   data class Options(
     val libraryEntries: Boolean = true,

@@ -1086,4 +1086,8 @@
     <string name="manage_extensions">Manage extensions</string>
     <string name="manage_extensions_summary">Add, remove or update extensions</string>
     <string name="nsfw_filter">NSFW filter</string>
+    <string name="export_mihon_backup">Export Mihon-compliant backup</string>
+    <string name="export_mihon_backup_summary">Create a backup file compatible with Mihon</string>
+    <string name="mihon_backup_created">Mihon-compliant backup saved successfully</string>
 </resources>
+
